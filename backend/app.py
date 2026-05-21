@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 import psycopg2
 import psycopg2.extras
-import google.generativeai as genai
+from google import genai
 from langdetect import detect
 from deep_translator import GoogleTranslator
 
@@ -14,8 +14,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Configure Gemini AI
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.0-flash")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Language map
 LANGUAGE_MAP = {
@@ -144,7 +143,10 @@ Customer message: {english_message}
 Give a helpful friendly product recommendation in 2-3 sentences. Mention 1-2 specific product types they should consider. Keep it conversational and relevant to Indian homes."""
 
         # Get Gemini response
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
         english_response = response.text
 
         # Translate back to user language
