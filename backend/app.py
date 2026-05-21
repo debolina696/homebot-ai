@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -7,6 +7,7 @@ import psycopg2.extras
 from google import genai
 from langdetect import detect
 from deep_translator import GoogleTranslator
+import io
 
 load_dotenv()
 
@@ -209,5 +210,114 @@ def add_to_cart():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Route 7: Generate PDF Quote
+@app.route("/api/generate-pdf", methods=["POST"])
+def generate_pdf():
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import inch
+
+        data       = request.get_json()
+        items      = data.get("items", [])
+        budget     = data.get("budget", 0)
+        room       = data.get("room", "Home")
+
+        # Calculate totals
+        subtotal   = sum(i["price"] * i["qty"] for i in items)
+        gst        = round(subtotal * 0.18, 2)
+        grandtotal = round(subtotal + gst, 2)
+
+        # Create PDF in memory
+        buffer = io.BytesIO()
+        doc    = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=40,
+            bottomMargin=40
+        )
+        styles = getSampleStyleSheet()
+        story  = []
+
+        # Title
+        story.append(Paragraph(
+            "<b>HomeBot AI — Product Quotation</b>",
+            styles["Title"]
+        ))
+        story.append(Spacer(1, 0.2 * inch))
+        story.append(Paragraph(
+            f"<b>Room:</b> {room}",
+            styles["Normal"]
+        ))
+        story.append(Paragraph(
+            f"<b>Budget:</b> Rs.{int(budget):,}",
+            styles["Normal"]
+        ))
+        story.append(Spacer(1, 0.3 * inch))
+
+        # Table data
+        table_data = [["Product", "Price (Rs.)", "Qty", "Total (Rs.)"]]
+        for item in items:
+            table_data.append([
+                str(item["name"]),
+                f"{int(item['price']):,}",
+                str(item["qty"]),
+                f"{int(item['price'] * item['qty']):,}"
+            ])
+
+        # Totals rows
+        table_data.append(["", "", "Subtotal",   f"{int(subtotal):,}"])
+        table_data.append(["", "", "GST 18%",    f"{int(gst):,}"])
+        table_data.append(["", "", "Grand Total", f"{int(grandtotal):,}"])
+
+        # Build table
+        table = Table(
+            table_data,
+            colWidths=[3*inch, 1.3*inch, 1.1*inch, 1.3*inch]
+        )
+        table.setStyle(TableStyle([
+            ("BACKGROUND",     (0, 0),  (-1, 0),  colors.HexColor("#BA7517")),
+            ("TEXTCOLOR",      (0, 0),  (-1, 0),  colors.white),
+            ("FONTNAME",       (0, 0),  (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",       (0, 0),  (-1, 0),  11),
+            ("ALIGN",          (0, 0),  (-1, -1), "CENTER"),
+            ("BACKGROUND",     (0, -1), (-1, -1), colors.HexColor("#BA7517")),
+            ("TEXTCOLOR",      (0, -1), (-1, -1), colors.white),
+            ("FONTNAME",       (0, -1), (-1, -1), "Helvetica-Bold"),
+            ("GRID",           (0, 0),  (-1, -1), 0.5, colors.grey),
+            ("PADDING",        (0, 0),  (-1, -1), 8),
+            ("ROWBACKGROUNDS", (0, 1),  (-1, -4),
+             [colors.white, colors.HexColor("#FFF3DC")]),
+        ]))
+
+        story.append(table)
+        story.append(Spacer(1, 0.3 * inch))
+        story.append(Paragraph(
+            "Thank you for using HomeBot AI!",
+            styles["Normal"]
+        ))
+        story.append(Paragraph(
+            "Share this quote with your contractor or interior designer.",
+            styles["Normal"]
+        ))
+
+        # Build and send PDF
+        doc.build(story)
+        pdf_data = buffer.getvalue()
+        buffer.close()
+
+        response = make_response(pdf_data)
+        response.headers["Content-Type"]        = "application/pdf"
+        response.headers["Content-Disposition"] = "attachment; filename=HomeBot_Quotation.pdf"
+        response.headers["Content-Length"]      = len(pdf_data)
+        return response
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000)   
