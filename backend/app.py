@@ -318,6 +318,128 @@ def generate_pdf():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    # Route 9: User Login
+@app.route("/api/login", methods=["POST"])
+def login():
+    try:
+        data     = request.get_json()
+        email    = data.get("email", "")
+        password = data.get("password", "")
+
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            "SELECT * FROM users WHERE email = %s AND password = %s",
+            (email, password)
+        )
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if user:
+            return jsonify({
+                "status":  "ok",
+                "message": "Login successful",
+                "user": {
+                    "id":       user["id"],
+                    "name":     user["name"],
+                    "email":    user["email"],
+                    "language": user["language"],
+                    "city":     user["city"]
+                }
+            })
+        else:
+            return jsonify({
+                "status":  "error",
+                "message": "Invalid email or password"
+            }), 401
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Route 10: User Registration
+@app.route("/api/register", methods=["POST"])
+def register():
+    try:
+        data     = request.get_json()
+        name     = data.get("name", "")
+        email    = data.get("email", "")
+        password = data.get("password", "")
+        phone    = data.get("phone", "")
+        city     = data.get("city", "")
+        language = data.get("language", "english")
+
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO users
+               (name, email, password, phone, city, language)
+               VALUES (%s, %s, %s, %s, %s, %s)
+               RETURNING id""",
+            (name, email, password, phone, city, language)
+        )
+        user_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status":  "ok",
+            "message": "Registration successful",
+            "user_id": user_id
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)   
+    app.run(debug=True, port=5000) 
+    # Route 8: Send WhatsApp notification
+@app.route("/api/notify-whatsapp", methods=["POST"])
+def notify_whatsapp():
+    try:
+        from twilio.rest import Client
+
+        data       = request.get_json()
+        items      = data.get("items", [])
+        total      = data.get("total", 0)
+        room       = data.get("room", "Home")
+        phone      = data.get("phone", os.getenv("YOUR_WHATSAPP"))
+
+        # Build message
+        item_list  = "\n".join([
+            f"• {i['name']} x{i['qty']} = Rs.{int(i['price']*i['qty']):,}"
+            for i in items
+        ])
+
+        message = f"""🏠 *HomeBot AI — Order Confirmation*
+
+Room: {room}
+Items:
+{item_list}
+
+💰 Grand Total: Rs.{int(total):,}
+
+Thank you for using HomeBot AI!
+Share your PDF quote with your contractor."""
+
+        # Send WhatsApp
+        client = Client(
+            os.getenv("TWILIO_SID"),
+            os.getenv("TWILIO_TOKEN")
+        )
+        client.messages.create(
+            from_=os.getenv("TWILIO_WHATSAPP"),
+            to=phone,
+            body=message
+        )
+
+        return jsonify({
+            "message": "WhatsApp notification sent!",
+            "status": "ok"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500  
