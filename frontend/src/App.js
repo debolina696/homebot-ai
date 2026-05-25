@@ -73,6 +73,12 @@ export default function App() {
   const [editPhone, setEditPhone]         = useState("");
   const [editCity, setEditCity]           = useState("");
   const [editLang, setEditLang]           = useState("");
+  const [uploadScreen, setUploadScreen]   = useState(false);
+  const [uploadFile, setUploadFile]       = useState(null);
+  const [uploadProductId, setUploadProductId] = useState("");
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState("");
+  const [allProducts, setAllProducts]     = useState([]);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -95,6 +101,10 @@ export default function App() {
     if (user && screen === "orders") loadOrders();
     if (user && screen === "profile") loadProfile();
   }, [screen, user]);
+
+  useEffect(() => {
+    if (uploadScreen) loadAllProducts();
+  }, [uploadScreen]);
 
   const loadOrders = async () => {
     if (!user) return;
@@ -122,6 +132,41 @@ export default function App() {
     setProfileLoading(false);
   };
 
+  const loadAllProducts = async () => {
+    try {
+      const r = await fetch(`${API}/api/search?q=`);
+      const d = await r.json();
+      setAllProducts(d.products || []);
+    } catch { setAllProducts([]); }
+  };
+
+  const uploadImage = async () => {
+    if (!uploadFile || !uploadProductId) {
+      alert("Please select a product and image!");
+      return;
+    }
+    setUploadLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      formData.append("product_id", uploadProductId);
+      const r = await fetch(`${API}/api/upload-image`, {
+        method: "POST",
+        body: formData
+      });
+      const d = await r.json();
+      if (d.status === "ok") {
+        setUploadSuccess(d.image_url);
+        alert("✅ Image uploaded successfully!");
+      } else {
+        alert("Error: " + d.error);
+      }
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    }
+    setUploadLoading(false);
+  };
+
   const trackOrder = async (orderId) => {
     setTrackLoading(true);
     setTrackedOrder(null);
@@ -140,10 +185,8 @@ export default function App() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: editName,
-          phone: editPhone,
-          city: editCity,
-          language: editLang
+          name: editName, phone: editPhone,
+          city: editCity, language: editLang
         })
       });
       const d = await r.json();
@@ -153,9 +196,7 @@ export default function App() {
         loadProfile();
         setUser({ ...user, name: editName });
       }
-    } catch (err) {
-      alert("Update failed: " + err.message);
-    }
+    } catch (err) { alert("Update failed: " + err.message); }
   };
 
   const placeOrder = async () => {
@@ -175,12 +216,8 @@ export default function App() {
         })
       });
       const d = await r.json();
-      if (d.status === "ok") {
-        setOrderSuccess(d);
-        setCart([]);
-      } else {
-        alert("Order failed: " + d.error);
-      }
+      if (d.status === "ok") { setOrderSuccess(d); setCart([]); }
+      else alert("Order failed: " + d.error);
     } catch (err) { alert("Order failed: " + err.message); }
     setOrderPlacing(false);
   };
@@ -311,7 +348,10 @@ export default function App() {
       const r = await fetch(`${API}/api/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: regName, email: regEmail, password: regPassword, phone: regPhone, city: regCity, language: "english" })
+        body: JSON.stringify({
+          name: regName, email: regEmail, password: regPassword,
+          phone: regPhone, city: regCity, language: "english"
+        })
       });
       const d = await r.json();
       if (d.status === "ok") { alert("✅ Registered! Please login."); setShowRegister(false); }
@@ -323,7 +363,16 @@ export default function App() {
   const selectStyle = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, marginBottom: 12, outline: "none", background: "white", boxSizing: "border-box" };
 
   const ProductCard = ({ p }) => (
-    <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <div style={{ flexShrink: 0 }}>
+        {p.image_url ? (
+          <img src={p.image_url} alt={p.name}
+            style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover" }}
+            onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/80x80/FFF3DC/BA7517?text=🏠"; }} />
+        ) : (
+          <div style={{ width: 80, height: 80, borderRadius: 8, background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🏠</div>
+        )}
+      </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 500, fontSize: 14 }}>{p.name}</div>
         <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{p.description}</div>
@@ -335,11 +384,11 @@ export default function App() {
           Brand: {p.brand} | Stock: {p.stock_qty}
           {p.room_name && <span style={{ color: "#BA7517" }}> | {p.room_name}</span>}
         </div>
+        <button onClick={() => addToCart(p)}
+          style={{ marginTop: 8, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12 }}>
+          + Add to Cart
+        </button>
       </div>
-      <button onClick={() => addToCart(p)}
-        style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, marginLeft: 12 }}>
-        + Add
-      </button>
     </div>
   );
 
@@ -370,9 +419,7 @@ export default function App() {
             <div style={{ textAlign: "center" }}>
               <span style={{ fontSize: 13, color: "#888" }}>New user? </span>
               <span onClick={() => setShowRegister(true)}
-                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer", fontWeight: 500 }}>
-                Register
-              </span>
+                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer", fontWeight: 500 }}>Register</span>
             </div>
           </div>
         ) : (
@@ -389,9 +436,7 @@ export default function App() {
             </button>
             <div style={{ textAlign: "center" }}>
               <span onClick={() => setShowRegister(false)}
-                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer" }}>
-                ← Back to Login
-              </span>
+                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer" }}>← Back to Login</span>
             </div>
           </div>
         )}
@@ -409,8 +454,6 @@ export default function App() {
           <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>Track Order #{trackedOrder.id}</div>
         </div>
         <div style={{ padding: 16 }}>
-
-          {/* Status badge */}
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, textAlign: "center" }}>
             <div style={{ fontSize: 13, color: "#888" }}>Current Status</div>
             <div style={{
@@ -422,31 +465,22 @@ export default function App() {
               {trackedOrder.status?.toUpperCase()}
             </div>
           </div>
-
-          {/* Timeline */}
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 600, marginBottom: 16 }}>Order Timeline</div>
             {trackedOrder.timeline?.map((step, i) => (
               <div key={i} style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-                  background: step.done ? "#E1F5EE" : "#f0f0f0",
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18
-                }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, background: step.done ? "#E1F5EE" : "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
                   {step.icon}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14, color: step.done ? "#085041" : "#888" }}>
-                    {step.step}
-                    {step.done && <span style={{ marginLeft: 6, color: "#1D9E75" }}>✓</span>}
+                    {step.step}{step.done && <span style={{ marginLeft: 6, color: "#1D9E75" }}>✓</span>}
                   </div>
                   <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{step.desc}</div>
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Order items */}
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 600, marginBottom: 12 }}>Items Ordered</div>
             {trackedOrder.items?.map((item, i) => (
@@ -465,8 +499,6 @@ export default function App() {
               <span style={{ color: "#BA7517" }}>₹{Number(trackedOrder.grand_total).toLocaleString("en-IN")}</span>
             </div>
           </div>
-
-          {/* Customer info */}
           <div style={{ background: "white", borderRadius: 12, padding: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>Delivery Details</div>
             <div style={{ fontSize: 13, color: "#555" }}>👤 {trackedOrder.customer_name}</div>
@@ -492,13 +524,9 @@ export default function App() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ background: "white", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "#BA7517", fontWeight: 500, cursor: "pointer" }}
-            onClick={() => setScreen("cart")}>
-            🛒 {cart.length}
-          </div>
+            onClick={() => setScreen("cart")}>🛒 {cart.length}</div>
           <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "4px 10px", fontSize: 12, color: "white", cursor: "pointer" }}
-            onClick={() => { setUser(null); setScreen("login"); setCart([]); }}>
-            Logout
-          </div>
+            onClick={() => { setUser(null); setScreen("login"); setCart([]); }}>Logout</div>
         </div>
       </div>
 
@@ -518,6 +546,49 @@ export default function App() {
         ))}
       </div>
 
+      {/* Image Upload Modal */}
+      {uploadScreen && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 400, maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>📸 Upload Product Image</div>
+              <button onClick={() => { setUploadScreen(false); setUploadSuccess(""); setUploadFile(null); setUploadProductId(""); }}
+                style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>✕</button>
+            </div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Select Product</div>
+            <select value={uploadProductId} onChange={e => setUploadProductId(e.target.value)}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, outline: "none", background: "white" }}>
+              <option value="">-- Select a product --</option>
+              {allProducts.map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.room_name})</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Select Image</div>
+            <input type="file" accept="image/*"
+              onChange={e => setUploadFile(e.target.files[0])}
+              style={{ width: "100%", marginBottom: 16, fontSize: 13 }} />
+            {uploadFile && (
+              <div style={{ marginBottom: 16, textAlign: "center" }}>
+                <img src={URL.createObjectURL(uploadFile)} alt="preview"
+                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8, border: "1px solid #eee" }} />
+                <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{uploadFile.name}</div>
+              </div>
+            )}
+            {uploadSuccess && (
+              <div style={{ background: "#E1F5EE", borderRadius: 8, padding: 10, marginBottom: 12, textAlign: "center" }}>
+                <img src={uploadSuccess} alt="uploaded"
+                  style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6 }} />
+                <div style={{ fontSize: 12, color: "#085041", marginTop: 4 }}>✅ Uploaded!</div>
+              </div>
+            )}
+            <button onClick={uploadImage} disabled={uploadLoading}
+              style={{ width: "100%", padding: 12, background: uploadLoading ? "#ccc" : "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: uploadLoading ? "not-allowed" : "pointer" }}>
+              {uploadLoading ? "⏳ Uploading..." : "📤 Upload Image"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <div style={{ padding: "16px", paddingBottom: 80 }}>
 
@@ -530,11 +601,7 @@ export default function App() {
               {ROOMS.map(room => (
                 <div key={room.id}
                   onClick={() => { setRoom(room); setScreen("products"); }}
-                  style={{
-                    background: selectedRoom?.id === room.id ? "#FFF3DC" : "white",
-                    border: selectedRoom?.id === room.id ? "2px solid #BA7517" : "1px solid #eee",
-                    borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center"
-                  }}>
+                  style={{ background: selectedRoom?.id === room.id ? "#FFF3DC" : "white", border: selectedRoom?.id === room.id ? "2px solid #BA7517" : "1px solid #eee", borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 32 }}>{room.icon}</div>
                   <div style={{ fontSize: 14, fontWeight: 500, marginTop: 6 }}>{room.name}</div>
                 </div>
@@ -572,9 +639,7 @@ export default function App() {
                 {selectedRoom ? `${selectedRoom.icon} ${selectedRoom.name}` : "Select a room first"}
               </div>
               <button onClick={() => setScreen("home")}
-                style={{ fontSize: 12, color: "#BA7517", background: "none", border: "none", cursor: "pointer" }}>
-                ← Back
-              </button>
+                style={{ fontSize: 12, color: "#BA7517", background: "none", border: "none", cursor: "pointer" }}>← Back</button>
             </div>
             {products.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
             {products.map(p => <ProductCard key={p.id} p={p} />)}
@@ -591,9 +656,7 @@ export default function App() {
                 placeholder="Search tiles, sink, wardrobe..."
                 style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }} />
               <button onClick={handleSearch}
-                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontSize: 16 }}>
-                🔍
-              </button>
+                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontSize: 16 }}>🔍</button>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <button onClick={() => setShowFilters(!showFilters)}
@@ -602,9 +665,7 @@ export default function App() {
               </button>
               {(filterRoom || filterMin || filterMax || filterStyle || filterBrand) && (
                 <button onClick={clearFilters}
-                  style={{ fontSize: 12, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>
-                  Clear all ✕
-                </button>
+                  style={{ fontSize: 12, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>Clear all ✕</button>
               )}
             </div>
             {showFilters && (
@@ -641,9 +702,7 @@ export default function App() {
             {searching && <div style={{ textAlign: "center", padding: 30, color: "#888" }}>🔍 Searching...</div>}
             {!searching && searchResults.length > 0 && (
               <div>
-                <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>
-                  Found <strong>{searchResults.length}</strong> products
-                </div>
+                <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>Found <strong>{searchResults.length}</strong> products</div>
                 {searchResults.map(p => <ProductCard key={p.id} p={p} />)}
               </div>
             )}
@@ -652,6 +711,12 @@ export default function App() {
                 <div style={{ fontSize: 32 }}>🔍</div>
                 <div style={{ marginTop: 8 }}>Search across all rooms</div>
                 <div style={{ fontSize: 12, marginTop: 8 }}>Try: tile, tap, wardrobe, light</div>
+              </div>
+            )}
+            {!searching && searchResults.length === 0 && searchQuery && (
+              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
+                <div style={{ fontSize: 32 }}>🔍</div>
+                <div style={{ marginTop: 8 }}>No results for "{searchQuery}"</div>
               </div>
             )}
           </div>
@@ -671,14 +736,11 @@ export default function App() {
             {orders.map(order => {
               const statusStyle = STATUS_COLORS[order.status] || STATUS_COLORS.pending;
               return (
-                <div key={order.id}
-                  style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <div key={order.id} style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>Order #{order.id}</div>
-                      <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
-                        {new Date(order.created_at).toLocaleDateString("en-IN")}
-                      </div>
+                      <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{new Date(order.created_at).toLocaleDateString("en-IN")}</div>
                     </div>
                     <div style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>
                       {order.status}
@@ -690,12 +752,8 @@ export default function App() {
                     </div>
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: "1px solid #eee" }}>
-                    <span style={{ fontWeight: 700, color: "#BA7517" }}>
-                      ₹{Number(order.grand_total).toLocaleString("en-IN")}
-                    </span>
-                    <button
-                      onClick={() => trackOrder(order.id)}
-                      disabled={trackLoading}
+                    <span style={{ fontWeight: 700, color: "#BA7517" }}>₹{Number(order.grand_total).toLocaleString("en-IN")}</span>
+                    <button onClick={() => trackOrder(order.id)} disabled={trackLoading}
                       style={{ background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                       🚚 Track Order
                     </button>
@@ -713,11 +771,8 @@ export default function App() {
             {profileLoading && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
             {profile && !editProfile && (
               <div>
-                {/* Avatar */}
                 <div style={{ background: "white", borderRadius: 12, padding: 20, marginBottom: 12, textAlign: "center" }}>
-                  <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto" }}>
-                    👤
-                  </div>
+                  <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto" }}>👤</div>
                   <div style={{ fontWeight: 600, fontSize: 18, marginTop: 10 }}>{profile.user.name}</div>
                   <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{profile.user.email}</div>
                   <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>📍 {profile.user.city || "City not set"}</div>
@@ -725,14 +780,16 @@ export default function App() {
                     style={{ marginTop: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
                     ✏️ Edit Profile
                   </button>
+                  <button onClick={() => setUploadScreen(true)}
+                    style={{ marginTop: 10, marginLeft: 8, background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
+                    📸 Upload Product Images
+                  </button>
                 </div>
-
-                {/* Stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   {[
-                    { label: "Total Orders", value: profile.stats.total_orders, icon: "📦" },
-                    { label: "Delivered",    value: profile.stats.delivered,    icon: "✅" },
-                    { label: "Pending",      value: profile.stats.pending,      icon: "⏳" },
+                    { label: "Total Orders", value: profile.stats.total_orders,  icon: "📦" },
+                    { label: "Delivered",    value: profile.stats.delivered,     icon: "✅" },
+                    { label: "Pending",      value: profile.stats.pending,       icon: "⏳" },
                     { label: "Total Spent",  value: `₹${Number(profile.stats.total_spent).toLocaleString("en-IN")}`, icon: "💰" },
                   ].map((stat, i) => (
                     <div key={i} style={{ background: "white", borderRadius: 12, padding: 14, textAlign: "center" }}>
@@ -742,13 +799,11 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-
-                {/* Details */}
                 <div style={{ background: "white", borderRadius: 12, padding: 16 }}>
                   <div style={{ fontWeight: 600, marginBottom: 12 }}>Account Details</div>
                   {[
-                    { label: "Phone",    value: profile.user.phone || "Not set" },
-                    { label: "City",     value: profile.user.city || "Not set" },
+                    { label: "Phone",    value: profile.user.phone    || "Not set" },
+                    { label: "City",     value: profile.user.city     || "Not set" },
                     { label: "Language", value: profile.user.language || "English" },
                   ].map((item, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 14 }}>
@@ -759,8 +814,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
-            {/* Edit Profile Form */}
             {profile && editProfile && (
               <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
                 <div style={{ fontWeight: 600, marginBottom: 16 }}>✏️ Edit Profile</div>
@@ -812,8 +865,7 @@ export default function App() {
               </div>
             )}
             {cart.map(item => (
-              <div key={item.id}
-                style={{ background: "white", borderRadius: 12, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div key={item.id} style={{ background: "white", borderRadius: 12, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14 }}>{item.name}</div>
                   <div style={{ color: "#BA7517", fontSize: 13, marginTop: 2 }}>
@@ -823,9 +875,7 @@ export default function App() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ fontWeight: 600 }}>₹{(item.price * item.qty).toLocaleString("en-IN")}</div>
                   <button onClick={() => removeFromCart(item.id)}
-                    style={{ background: "#fee", border: "1px solid #fcc", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#c00", fontSize: 12 }}>
-                    ✕
-                  </button>
+                    style={{ background: "#fee", border: "1px solid #fcc", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#c00", fontSize: 12 }}>✕</button>
                 </div>
               </div>
             ))}

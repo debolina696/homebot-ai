@@ -763,6 +763,56 @@ def update_profile(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# Route: Upload product image to Cloudinary
+@app.route("/api/upload-image", methods=["POST"])
+def upload_image():
+    try:
+        import cloudinary
+        import cloudinary.uploader
+
+        cloudinary.config(
+            cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
+            api_key    = os.getenv("CLOUDINARY_API_KEY"),
+            api_secret = os.getenv("CLOUDINARY_API_SECRET")
+        )
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+
+        file       = request.files["file"]
+        product_id = request.form.get("product_id")
+
+        # Upload to Cloudinary
+        result = cloudinary.uploader.upload(
+            file,
+            folder        = "homebot-products",
+            public_id     = f"product_{product_id}",
+            overwrite     = True,
+            resource_type = "image"
+        )
+
+        image_url = result["secure_url"]
+
+        # Save URL to database
+        if product_id:
+            conn   = get_db()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE products SET image_url = %s WHERE id = %s",
+                (image_url, int(product_id))
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+        return jsonify({
+            "status":    "ok",
+            "image_url": image_url,
+            "message":   "Image uploaded successfully"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000) 
     # Route 8: Send WhatsApp notification
