@@ -813,6 +813,222 @@ def upload_image():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── ADMIN ROUTES ──
+
+# Route: Get all products for admin
+@app.route("/api/admin/products", methods=["GET"])
+def admin_get_products():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT p.*, r.name as room_name
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               ORDER BY r.name, p.name"""
+        )
+        products = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"products": list(products)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Add new product
+@app.route("/api/admin/products", methods=["POST"])
+def admin_add_product():
+    try:
+        data = request.get_json()
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO products
+               (room_id, name, description, price, unit,
+                stock_qty, style_tag, brand,
+                length_cm, width_cm, height_cm,
+                material, color, image_url)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               RETURNING id""",
+            (
+                data.get("room_id"),
+                data.get("name"),
+                data.get("description"),
+                data.get("price"),
+                data.get("unit"),
+                data.get("stock_qty", 0),
+                data.get("style_tag"),
+                data.get("brand"),
+                data.get("length_cm"),
+                data.get("width_cm"),
+                data.get("height_cm"),
+                data.get("material"),
+                data.get("color"),
+                data.get("image_url")
+            )
+        )
+        product_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "status":     "ok",
+            "message":    "Product added successfully",
+            "product_id": product_id
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Update product
+@app.route("/api/admin/products/<int:product_id>", methods=["PUT"])
+def admin_update_product(product_id):
+    try:
+        data   = request.get_json()
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE products SET
+               room_id     = %s,
+               name        = %s,
+               description = %s,
+               price       = %s,
+               unit        = %s,
+               stock_qty   = %s,
+               style_tag   = %s,
+               brand       = %s,
+               length_cm   = %s,
+               width_cm    = %s,
+               height_cm   = %s,
+               material    = %s,
+               color       = %s,
+               image_url   = %s
+               WHERE id    = %s""",
+            (
+                data.get("room_id"),
+                data.get("name"),
+                data.get("description"),
+                data.get("price"),
+                data.get("unit"),
+                data.get("stock_qty"),
+                data.get("style_tag"),
+                data.get("brand"),
+                data.get("length_cm"),
+                data.get("width_cm"),
+                data.get("height_cm"),
+                data.get("material"),
+                data.get("color"),
+                data.get("image_url"),
+                product_id
+            )
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "status":  "ok",
+            "message": "Product updated successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Delete product
+@app.route("/api/admin/products/<int:product_id>", methods=["DELETE"])
+def admin_delete_product(product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM products WHERE id = %s",
+            (product_id,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "status":  "ok",
+            "message": "Product deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get dashboard stats for admin
+@app.route("/api/admin/stats", methods=["GET"])
+def admin_stats():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Total products
+        cursor.execute("SELECT COUNT(*) as count FROM products")
+        total_products = cursor.fetchone()["count"]
+
+        # Total users
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        total_users = cursor.fetchone()["count"]
+
+        # Total orders
+        cursor.execute("SELECT COUNT(*) as count FROM orders")
+        total_orders = cursor.fetchone()["count"]
+
+        # Total revenue
+        cursor.execute(
+            "SELECT COALESCE(SUM(grand_total),0) as total FROM orders"
+        )
+        total_revenue = cursor.fetchone()["total"]
+
+        # Orders by status
+        cursor.execute(
+            """SELECT status, COUNT(*) as count
+               FROM orders GROUP BY status"""
+        )
+        orders_by_status = cursor.fetchall()
+
+        # Top 5 products by orders
+        cursor.execute(
+            """SELECT p.name, SUM(oi.quantity) as total_sold
+               FROM order_items oi
+               JOIN products p ON oi.product_id = p.id
+               GROUP BY p.name
+               ORDER BY total_sold DESC
+               LIMIT 5"""
+        )
+        top_products = cursor.fetchall()
+
+        # Revenue by room
+        cursor.execute(
+            """SELECT r.name as room, 
+               COALESCE(SUM(o.grand_total), 0) as revenue
+               FROM rooms r
+               LEFT JOIN products p ON p.room_id = r.id
+               LEFT JOIN order_items oi ON oi.product_id = p.id
+               LEFT JOIN orders o ON o.id = oi.order_id
+               GROUP BY r.name
+               ORDER BY revenue DESC"""
+        )
+        revenue_by_room = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_products":   total_products,
+            "total_users":      total_users,
+            "total_orders":     total_orders,
+            "total_revenue":    float(total_revenue),
+            "orders_by_status": list(orders_by_status),
+            "top_products":     list(top_products),
+            "revenue_by_room":  list(revenue_by_room)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000) 
     # Route 8: Send WhatsApp notification
