@@ -98,7 +98,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user && screen === "orders") loadOrders();
+    if (user && screen === "orders")  loadOrders();
     if (user && screen === "profile") loadProfile();
   }, [screen, user]);
 
@@ -247,7 +247,8 @@ export default function App() {
   const addToCart = (product) => {
     const exists = cart.find(i => i.id === product.id);
     if (exists) {
-      setCart(cart.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i));
+      setCart(cart.map(i => i.id === product.id
+        ? { ...i, qty: i.qty + 1 } : i));
     } else {
       setCart([...cart, { ...product, qty: 1 }]);
     }
@@ -293,20 +294,35 @@ export default function App() {
     try {
       const response = await fetch(`${API}/api/generate-pdf`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/pdf" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/pdf"
+        },
         body: JSON.stringify({
-          items: cart.map(i => ({ name: String(i.name), price: Number(i.price), qty: Number(i.qty) })),
+          items: cart.map(i => ({
+            name: String(i.name),
+            price: Number(i.price),
+            qty: Number(i.qty)
+          })),
           budget: Number(budget),
           room: selectedRoom?.name || "Home"
         })
       });
       if (!response.ok) { alert("PDF Error"); setPdfLoading(false); return; }
       const blob = await response.blob();
-      const url  = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-      const a    = document.createElement("a");
-      a.style.display = "none"; a.href = url; a.download = "HomeBot_Quotation.pdf";
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { window.URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
+      const url  = window.URL.createObjectURL(
+        new Blob([blob], { type: "application/pdf" })
+      );
+      const a         = document.createElement("a");
+      a.style.display = "none";
+      a.href          = url;
+      a.download      = "HomeBot_Quotation.pdf";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
     } catch (err) { alert("PDF failed: " + err.message); }
     setPdfLoading(false);
   };
@@ -319,8 +335,13 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cart.map(i => ({ name: i.name, price: Number(i.price), qty: Number(i.qty) })),
-          total: grandTotal, room: selectedRoom?.name || "Home",
+          items: cart.map(i => ({
+            name: i.name,
+            price: Number(i.price),
+            qty: Number(i.qty)
+          })),
+          total: grandTotal,
+          room: selectedRoom?.name || "Home",
           phone: `whatsapp:${phone}`
         })
       });
@@ -335,7 +356,10 @@ export default function App() {
       const r = await fetch(`${API}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword
+        })
       });
       const d = await r.json();
       if (d.status === "ok") { setUser(d.user); setScreen("home"); }
@@ -349,50 +373,97 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: regName, email: regEmail, password: regPassword,
-          phone: regPhone, city: regCity, language: "english"
+          name: regName, email: regEmail,
+          password: regPassword, phone: regPhone,
+          city: regCity, language: "english"
         })
       });
       const d = await r.json();
-      if (d.status === "ok") { alert("✅ Registered! Please login."); setShowRegister(false); }
-      else alert("Error: " + d.error);
+      if (d.status === "ok") {
+        alert("✅ Registered! Please login.");
+        setShowRegister(false);
+      } else alert("Error: " + d.error);
     } catch (err) { alert("Failed: " + err.message); }
   };
 
-  const inputStyle  = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, marginBottom: 12, outline: "none", boxSizing: "border-box" };
-  const selectStyle = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, marginBottom: 12, outline: "none", background: "white", boxSizing: "border-box" };
+  const inputStyle = {
+    width: "100%", padding: "10px 14px", borderRadius: 8,
+    border: "1px solid #ddd", fontSize: 14, marginBottom: 12,
+    outline: "none", boxSizing: "border-box"
+  };
 
+  const selectStyle = {
+    width: "100%", padding: "10px 14px", borderRadius: 8,
+    border: "1px solid #ddd", fontSize: 14, marginBottom: 12,
+    outline: "none", background: "white", boxSizing: "border-box"
+  };
+
+  // ── Product Card with dimensions ──
   const ProductCard = ({ p }) => (
     <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
       <div style={{ flexShrink: 0 }}>
         {p.image_url ? (
           <img src={p.image_url} alt={p.name}
-            style={{ width: 80, height: 80, borderRadius: 8, objectFit: "cover" }}
-            onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/80x80/FFF3DC/BA7517?text=🏠"; }} />
+            style={{ width: 90, height: 90, borderRadius: 8, objectFit: "cover" }}
+            onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/90x90/FFF3DC/BA7517?text=🏠"; }} />
         ) : (
-          <div style={{ width: 80, height: 80, borderRadius: 8, background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🏠</div>
+          <div style={{ width: 90, height: 90, borderRadius: 8, background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>🏠</div>
         )}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 500, fontSize: 14 }}>{p.name}</div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
         <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{p.description}</div>
-        <div style={{ color: "#BA7517", fontWeight: 600, marginTop: 4 }}>
+
+        {/* Price */}
+        <div style={{ color: "#BA7517", fontWeight: 700, marginTop: 6, fontSize: 15 }}>
           ₹{Number(p.price).toLocaleString("en-IN")}
-          <span style={{ fontSize: 11, color: "#888" }}> {p.unit}</span>
+          <span style={{ fontSize: 11, color: "#888", fontWeight: 400 }}> / {p.unit}</span>
         </div>
-        <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
-          Brand: {p.brand} | Stock: {p.stock_qty}
-          {p.room_name && <span style={{ color: "#BA7517" }}> | {p.room_name}</span>}
+
+        {/* Dimensions */}
+        {(p.length_cm || p.width_cm || p.height_cm) && (
+          <div style={{ fontSize: 11, color: "#555", marginTop: 4, background: "#f8f8f8", borderRadius: 6, padding: "3px 8px", display: "inline-block" }}>
+            📐 {[
+              p.length_cm && `L:${p.length_cm}cm`,
+              p.width_cm  && `W:${p.width_cm}cm`,
+              p.height_cm && `H:${p.height_cm}cm`
+            ].filter(Boolean).join(" × ")}
+          </div>
+        )}
+
+        {/* Material and Color */}
+        {(p.material || p.color) && (
+          <div style={{ fontSize: 11, marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {p.material && (
+              <span style={{ background: "#EEEDFE", color: "#26215C", borderRadius: 4, padding: "2px 6px" }}>
+                🧱 {p.material}
+              </span>
+            )}
+            {p.color && (
+              <span style={{ background: "#E1F5EE", color: "#085041", borderRadius: 4, padding: "2px 6px" }}>
+                🎨 {p.color}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Brand and Stock */}
+        <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
+          Brand: <strong>{p.brand}</strong> | Stock: {p.stock_qty}
+          {p.room_name && (
+            <span style={{ color: "#BA7517" }}> | {p.room_name}</span>
+          )}
         </div>
+
         <button onClick={() => addToCart(p)}
-          style={{ marginTop: 8, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12 }}>
+          style={{ marginTop: 8, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 16px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
           + Add to Cart
         </button>
       </div>
     </div>
   );
 
-  // LOGIN SCREEN
+  // ── LOGIN SCREEN ──
   if (screen === "login") {
     return (
       <div style={{ fontFamily: "sans-serif", maxWidth: 400, margin: "0 auto", padding: "40px 20px", background: "#f8f9fa", minHeight: "100vh" }}>
@@ -404,11 +475,15 @@ export default function App() {
         {!showRegister ? (
           <div style={{ background: "white", borderRadius: 16, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20 }}>Login</div>
-            <input placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} style={inputStyle} />
+            <input placeholder="Email" value={loginEmail}
+              onChange={e => setLoginEmail(e.target.value)} style={inputStyle} />
             <input type="password" placeholder="Password" value={loginPassword}
               onChange={e => setLoginPassword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleLogin()} style={inputStyle} />
-            {loginError && <div style={{ color: "red", fontSize: 13, marginBottom: 10 }}>{loginError}</div>}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              style={inputStyle} />
+            {loginError && (
+              <div style={{ color: "red", fontSize: 13, marginBottom: 10 }}>{loginError}</div>
+            )}
             <button onClick={handleLogin}
               style={{ width: "100%", padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 12 }}>
               Login →
@@ -419,24 +494,33 @@ export default function App() {
             <div style={{ textAlign: "center" }}>
               <span style={{ fontSize: 13, color: "#888" }}>New user? </span>
               <span onClick={() => setShowRegister(true)}
-                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer", fontWeight: 500 }}>Register</span>
+                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer", fontWeight: 500 }}>
+                Register
+              </span>
             </div>
           </div>
         ) : (
           <div style={{ background: "white", borderRadius: 16, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20 }}>Create Account</div>
-            <input placeholder="Full name" value={regName} onChange={e => setRegName(e.target.value)} style={inputStyle} />
-            <input placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} style={inputStyle} />
-            <input type="password" placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} style={inputStyle} />
-            <input placeholder="Phone" value={regPhone} onChange={e => setRegPhone(e.target.value)} style={inputStyle} />
-            <input placeholder="City" value={regCity} onChange={e => setRegCity(e.target.value)} style={inputStyle} />
+            <input placeholder="Full name" value={regName}
+              onChange={e => setRegName(e.target.value)} style={inputStyle} />
+            <input placeholder="Email" value={regEmail}
+              onChange={e => setRegEmail(e.target.value)} style={inputStyle} />
+            <input type="password" placeholder="Password" value={regPassword}
+              onChange={e => setRegPassword(e.target.value)} style={inputStyle} />
+            <input placeholder="Phone" value={regPhone}
+              onChange={e => setRegPhone(e.target.value)} style={inputStyle} />
+            <input placeholder="City" value={regCity}
+              onChange={e => setRegCity(e.target.value)} style={inputStyle} />
             <button onClick={handleRegister}
               style={{ width: "100%", padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 12 }}>
               Register →
             </button>
             <div style={{ textAlign: "center" }}>
               <span onClick={() => setShowRegister(false)}
-                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer" }}>← Back to Login</span>
+                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer" }}>
+                ← Back to Login
+              </span>
             </div>
           </div>
         )}
@@ -444,14 +528,16 @@ export default function App() {
     );
   }
 
-  // ORDER TRACKING SCREEN
+  // ── ORDER TRACKING SCREEN ──
   if (screen === "track" && trackedOrder) {
     return (
       <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto", background: "#f8f9fa", minHeight: "100vh" }}>
         <div style={{ background: "#BA7517", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
           <button onClick={() => setScreen("orders")}
             style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>←</button>
-          <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>Track Order #{trackedOrder.id}</div>
+          <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>
+            Track Order #{trackedOrder.id}
+          </div>
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, textAlign: "center" }}>
@@ -459,8 +545,9 @@ export default function App() {
             <div style={{
               display: "inline-block", marginTop: 8,
               background: STATUS_COLORS[trackedOrder.status]?.bg || "#f0f0f0",
-              color: STATUS_COLORS[trackedOrder.status]?.color || "#333",
-              borderRadius: 20, padding: "6px 20px", fontSize: 15, fontWeight: 600
+              color:      STATUS_COLORS[trackedOrder.status]?.color || "#333",
+              borderRadius: 20, padding: "6px 20px",
+              fontSize: 15, fontWeight: 600
             }}>
               {trackedOrder.status?.toUpperCase()}
             </div>
@@ -474,7 +561,8 @@ export default function App() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14, color: step.done ? "#085041" : "#888" }}>
-                    {step.step}{step.done && <span style={{ marginLeft: 6, color: "#1D9E75" }}>✓</span>}
+                    {step.step}
+                    {step.done && <span style={{ marginLeft: 6, color: "#1D9E75" }}>✓</span>}
                   </div>
                   <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{step.desc}</div>
                 </div>
@@ -487,7 +575,9 @@ export default function App() {
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
                 <div>
                   <div style={{ fontWeight: 500 }}>{item.product_name}</div>
-                  <div style={{ color: "#888", fontSize: 12 }}>Brand: {item.brand} | Qty: {item.quantity}</div>
+                  <div style={{ color: "#888", fontSize: 12 }}>
+                    Brand: {item.brand} | Qty: {item.quantity}
+                  </div>
                 </div>
                 <div style={{ fontWeight: 600, color: "#BA7517" }}>
                   ₹{(item.price * item.quantity).toLocaleString("en-IN")}
@@ -496,7 +586,9 @@ export default function App() {
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontWeight: 700, fontSize: 15 }}>
               <span>Grand Total</span>
-              <span style={{ color: "#BA7517" }}>₹{Number(trackedOrder.grand_total).toLocaleString("en-IN")}</span>
+              <span style={{ color: "#BA7517" }}>
+                ₹{Number(trackedOrder.grand_total).toLocaleString("en-IN")}
+              </span>
             </div>
           </div>
           <div style={{ background: "white", borderRadius: 12, padding: 16 }}>
@@ -510,7 +602,7 @@ export default function App() {
     );
   }
 
-  // MAIN APP
+  // ── MAIN APP ──
   return (
     <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto", background: "#f8f9fa", minHeight: "100vh" }}>
 
@@ -524,9 +616,13 @@ export default function App() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ background: "white", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "#BA7517", fontWeight: 500, cursor: "pointer" }}
-            onClick={() => setScreen("cart")}>🛒 {cart.length}</div>
+            onClick={() => setScreen("cart")}>
+            🛒 {cart.length}
+          </div>
           <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "4px 10px", fontSize: 12, color: "white", cursor: "pointer" }}
-            onClick={() => { setUser(null); setScreen("login"); setCart([]); }}>Logout</div>
+            onClick={() => { setUser(null); setScreen("login"); setCart([]); }}>
+            Logout
+          </div>
         </div>
       </div>
 
@@ -639,9 +735,13 @@ export default function App() {
                 {selectedRoom ? `${selectedRoom.icon} ${selectedRoom.name}` : "Select a room first"}
               </div>
               <button onClick={() => setScreen("home")}
-                style={{ fontSize: 12, color: "#BA7517", background: "none", border: "none", cursor: "pointer" }}>← Back</button>
+                style={{ fontSize: 12, color: "#BA7517", background: "none", border: "none", cursor: "pointer" }}>
+                ← Back
+              </button>
             </div>
-            {products.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
+            {products.length === 0 && (
+              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>
+            )}
             {products.map(p => <ProductCard key={p.id} p={p} />)}
           </div>
         )}
@@ -665,7 +765,9 @@ export default function App() {
               </button>
               {(filterRoom || filterMin || filterMax || filterStyle || filterBrand) && (
                 <button onClick={clearFilters}
-                  style={{ fontSize: 12, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>Clear all ✕</button>
+                  style={{ fontSize: 12, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>
+                  Clear all ✕
+                </button>
               )}
             </div>
             {showFilters && (
@@ -689,9 +791,11 @@ export default function App() {
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Price Range (₹)</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input type="number" placeholder="Min" value={filterMin}
-                    onChange={e => setFilterMin(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }} />
+                    onChange={e => setFilterMin(e.target.value)}
+                    style={{ ...inputStyle, marginBottom: 0 }} />
                   <input type="number" placeholder="Max" value={filterMax}
-                    onChange={e => setFilterMax(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }} />
+                    onChange={e => setFilterMax(e.target.value)}
+                    style={{ ...inputStyle, marginBottom: 0 }} />
                 </div>
                 <button onClick={handleSearch}
                   style={{ width: "100%", marginTop: 12, padding: 10, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
@@ -699,10 +803,14 @@ export default function App() {
                 </button>
               </div>
             )}
-            {searching && <div style={{ textAlign: "center", padding: 30, color: "#888" }}>🔍 Searching...</div>}
+            {searching && (
+              <div style={{ textAlign: "center", padding: 30, color: "#888" }}>🔍 Searching...</div>
+            )}
             {!searching && searchResults.length > 0 && (
               <div>
-                <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>Found <strong>{searchResults.length}</strong> products</div>
+                <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>
+                  Found <strong>{searchResults.length}</strong> products
+                </div>
                 {searchResults.map(p => <ProductCard key={p.id} p={p} />)}
               </div>
             )}
@@ -726,7 +834,9 @@ export default function App() {
         {screen === "orders" && (
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>📦 My Orders</div>
-            {ordersLoading && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
+            {ordersLoading && (
+              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>
+            )}
             {!ordersLoading && orders.length === 0 && (
               <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
                 <div style={{ fontSize: 40 }}>📦</div>
@@ -736,11 +846,14 @@ export default function App() {
             {orders.map(order => {
               const statusStyle = STATUS_COLORS[order.status] || STATUS_COLORS.pending;
               return (
-                <div key={order.id} style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                <div key={order.id}
+                  style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>Order #{order.id}</div>
-                      <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{new Date(order.created_at).toLocaleDateString("en-IN")}</div>
+                      <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+                        {new Date(order.created_at).toLocaleDateString("en-IN")}
+                      </div>
                     </div>
                     <div style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>
                       {order.status}
@@ -752,7 +865,9 @@ export default function App() {
                     </div>
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: "1px solid #eee" }}>
-                    <span style={{ fontWeight: 700, color: "#BA7517" }}>₹{Number(order.grand_total).toLocaleString("en-IN")}</span>
+                    <span style={{ fontWeight: 700, color: "#BA7517" }}>
+                      ₹{Number(order.grand_total).toLocaleString("en-IN")}
+                    </span>
                     <button onClick={() => trackOrder(order.id)} disabled={trackLoading}
                       style={{ background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                       🚚 Track Order
@@ -768,7 +883,9 @@ export default function App() {
         {screen === "profile" && (
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>👤 My Profile</div>
-            {profileLoading && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
+            {profileLoading && (
+              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>
+            )}
             {profile && !editProfile && (
               <div>
                 <div style={{ background: "white", borderRadius: 12, padding: 20, marginBottom: 12, textAlign: "center" }}>
@@ -776,14 +893,16 @@ export default function App() {
                   <div style={{ fontWeight: 600, fontSize: 18, marginTop: 10 }}>{profile.user.name}</div>
                   <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{profile.user.email}</div>
                   <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>📍 {profile.user.city || "City not set"}</div>
-                  <button onClick={() => setEditProfile(true)}
-                    style={{ marginTop: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
-                    ✏️ Edit Profile
-                  </button>
-                  <button onClick={() => setUploadScreen(true)}
-                    style={{ marginTop: 10, marginLeft: 8, background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
-                    📸 Upload Product Images
-                  </button>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+                    <button onClick={() => setEditProfile(true)}
+                      style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
+                      ✏️ Edit Profile
+                    </button>
+                    <button onClick={() => setUploadScreen(true)}
+                      style={{ background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
+                      📸 Upload Images
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   {[
@@ -865,7 +984,8 @@ export default function App() {
               </div>
             )}
             {cart.map(item => (
-              <div key={item.id} style={{ background: "white", borderRadius: 12, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div key={item.id}
+                style={{ background: "white", borderRadius: 12, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14 }}>{item.name}</div>
                   <div style={{ color: "#BA7517", fontSize: 13, marginTop: 2 }}>
@@ -873,19 +993,25 @@ export default function App() {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ fontWeight: 600 }}>₹{(item.price * item.qty).toLocaleString("en-IN")}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    ₹{(item.price * item.qty).toLocaleString("en-IN")}
+                  </div>
                   <button onClick={() => removeFromCart(item.id)}
-                    style={{ background: "#fee", border: "1px solid #fcc", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#c00", fontSize: 12 }}>✕</button>
+                    style={{ background: "#fee", border: "1px solid #fcc", borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: "#c00", fontSize: 12 }}>
+                    ✕
+                  </button>
                 </div>
               </div>
             ))}
             {cart.length > 0 && (
               <div style={{ background: "white", borderRadius: 12, padding: 16, marginTop: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14 }}>
-                  <span>Subtotal</span><span>₹{subtotal.toLocaleString("en-IN")}</span>
+                  <span>Subtotal</span>
+                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14, color: "#666" }}>
-                  <span>GST (18%)</span><span>₹{gst.toLocaleString("en-IN")}</span>
+                  <span>GST (18%)</span>
+                  <span>₹{gst.toLocaleString("en-IN")}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, borderTop: "1px solid #eee", paddingTop: 10 }}>
                   <span>Grand Total</span>
