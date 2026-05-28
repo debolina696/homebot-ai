@@ -34,14 +34,17 @@ LANGUAGE_MAP = {
     "en": "English"
 }
 
-# Database connection
+# Database connection — supports both local and Neon cloud
 def get_db():
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return psycopg2.connect(database_url, sslmode="require")
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        database=os.getenv("DB_NAME", "homebot_db"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "runka@1993"),
-        port=5432
+        host     = os.getenv("DB_HOST",     "localhost"),
+        database = os.getenv("DB_NAME",     "homebot_db"),
+        user     = os.getenv("DB_USER",     "postgres"),
+        password = os.getenv("DB_PASSWORD", "runka@1993"),
+        port     = 5432
     )
 
 # Translate helper
@@ -62,20 +65,20 @@ def home():
     return jsonify({
         "message": "HomeBot AI Backend Running",
         "version": "2.0",
-        "status": "ok",
-        "ai": "Gemini connected"
+        "status":  "ok",
+        "ai":      "Gemini connected"
     })
 
 # Route 2: Get all rooms
 @app.route("/api/rooms", methods=["GET"])
 def get_rooms():
     try:
-        conn = get_db()
+        conn   = get_db()
         cursor = conn.cursor(
             cursor_factory=psycopg2.extras.RealDictCursor
         )
         cursor.execute("SELECT * FROM rooms ORDER BY id")
-        rooms = cursor.fetchall()
+        rooms  = cursor.fetchall()
         cursor.close()
         conn.close()
         return jsonify({"rooms": list(rooms)})
@@ -86,7 +89,7 @@ def get_rooms():
 @app.route("/api/products/<int:room_id>", methods=["GET"])
 def get_products(room_id):
     try:
-        conn = get_db()
+        conn   = get_db()
         cursor = conn.cursor(
             cursor_factory=psycopg2.extras.RealDictCursor
         )
@@ -98,7 +101,7 @@ def get_products(room_id):
         cursor.close()
         conn.close()
         return jsonify({
-            "room_id": room_id,
+            "room_id":  room_id,
             "products": list(products)
         })
     except Exception as e:
@@ -108,10 +111,10 @@ def get_products(room_id):
 @app.route("/api/chat", methods=["POST"])
 def chat():
     try:
-        data = request.get_json()
+        data         = request.get_json()
         user_message = data.get("message", "")
-        room = data.get("room", "general")
-        budget = data.get("budget", None)
+        room         = data.get("room", "general")
+        budget       = data.get("budget", None)
 
         # Detect language
         try:
@@ -145,8 +148,8 @@ Give a helpful friendly product recommendation in 2-3 sentences. Mention 1-2 spe
 
         # Get Gemini response
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
+            model    = "gemini-2.0-flash",
+            contents = prompt
         )
         english_response = response.text
 
@@ -159,10 +162,10 @@ Give a helpful friendly product recommendation in 2-3 sentences. Mention 1-2 spe
             final_response = english_response
 
         return jsonify({
-            "reply": final_response,
+            "reply":         final_response,
             "detected_lang": lang_name,
-            "room": room,
-            "status": "ok"
+            "room":          room,
+            "status":        "ok"
         })
 
     except Exception as e:
@@ -171,31 +174,31 @@ Give a helpful friendly product recommendation in 2-3 sentences. Mention 1-2 spe
 # Route 5: Budget calculator
 @app.route("/api/budget", methods=["POST"])
 def calculate_budget():
-    data = request.get_json()
-    items = data.get("items", [])
-    total = sum(
+    data        = request.get_json()
+    items       = data.get("items", [])
+    total       = sum(
         item.get("price", 0) * item.get("qty", 1)
         for item in items
     )
-    gst = round(total * 0.18, 2)
+    gst         = round(total * 0.18, 2)
     grand_total = round(total + gst, 2)
     return jsonify({
-        "subtotal": total,
-        "gst_18pct": gst,
+        "subtotal":    total,
+        "gst_18pct":   gst,
         "grand_total": grand_total,
-        "currency": "INR"
+        "currency":    "INR"
     })
 
 # Route 6: Add to cart
 @app.route("/api/cart", methods=["POST"])
 def add_to_cart():
     try:
-        data = request.get_json()
-        user_id = data.get("user_id", 1)
+        data       = request.get_json()
+        user_id    = data.get("user_id", 1)
         product_id = data.get("product_id")
-        quantity = data.get("quantity", 1)
-        conn = get_db()
-        cursor = conn.cursor()
+        quantity   = data.get("quantity", 1)
+        conn       = get_db()
+        cursor     = conn.cursor()
         cursor.execute(
             "INSERT INTO cart (user_id, product_id, quantity) VALUES (%s, %s, %s)",
             (user_id, product_id, quantity)
@@ -205,7 +208,7 @@ def add_to_cart():
         conn.close()
         return jsonify({
             "message": "Added to cart",
-            "status": "ok"
+            "status":  "ok"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -225,41 +228,25 @@ def generate_pdf():
         budget     = data.get("budget", 0)
         room       = data.get("room", "Home")
 
-        # Calculate totals
         subtotal   = sum(i["price"] * i["qty"] for i in items)
         gst        = round(subtotal * 0.18, 2)
         grandtotal = round(subtotal + gst, 2)
 
-        # Create PDF in memory
         buffer = io.BytesIO()
         doc    = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=40,
-            leftMargin=40,
-            topMargin=40,
-            bottomMargin=40
+            buffer, pagesize=A4,
+            rightMargin=40, leftMargin=40,
+            topMargin=40,   bottomMargin=40
         )
         styles = getSampleStyleSheet()
         story  = []
 
-        # Title
-        story.append(Paragraph(
-            "<b>HomeBot AI — Product Quotation</b>",
-            styles["Title"]
-        ))
+        story.append(Paragraph("<b>HomeBot AI — Product Quotation</b>", styles["Title"]))
         story.append(Spacer(1, 0.2 * inch))
-        story.append(Paragraph(
-            f"<b>Room:</b> {room}",
-            styles["Normal"]
-        ))
-        story.append(Paragraph(
-            f"<b>Budget:</b> Rs.{int(budget):,}",
-            styles["Normal"]
-        ))
+        story.append(Paragraph(f"<b>Room:</b> {room}", styles["Normal"]))
+        story.append(Paragraph(f"<b>Budget:</b> Rs.{int(budget):,}", styles["Normal"]))
         story.append(Spacer(1, 0.3 * inch))
 
-        # Table data
         table_data = [["Product", "Price (Rs.)", "Qty", "Total (Rs.)"]]
         for item in items:
             table_data.append([
@@ -269,12 +256,10 @@ def generate_pdf():
                 f"{int(item['price'] * item['qty']):,}"
             ])
 
-        # Totals rows
-        table_data.append(["", "", "Subtotal",   f"{int(subtotal):,}"])
-        table_data.append(["", "", "GST 18%",    f"{int(gst):,}"])
+        table_data.append(["", "", "Subtotal",    f"{int(subtotal):,}"])
+        table_data.append(["", "", "GST 18%",     f"{int(gst):,}"])
         table_data.append(["", "", "Grand Total", f"{int(grandtotal):,}"])
 
-        # Build table
         table = Table(
             table_data,
             colWidths=[3*inch, 1.3*inch, 1.1*inch, 1.3*inch]
@@ -296,16 +281,9 @@ def generate_pdf():
 
         story.append(table)
         story.append(Spacer(1, 0.3 * inch))
-        story.append(Paragraph(
-            "Thank you for using HomeBot AI!",
-            styles["Normal"]
-        ))
-        story.append(Paragraph(
-            "Share this quote with your contractor or interior designer.",
-            styles["Normal"]
-        ))
+        story.append(Paragraph("Thank you for using HomeBot AI!", styles["Normal"]))
+        story.append(Paragraph("Share this quote with your contractor or interior designer.", styles["Normal"]))
 
-        # Build and send PDF
         doc.build(story)
         pdf_data = buffer.getvalue()
         buffer.close()
@@ -318,7 +296,53 @@ def generate_pdf():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    # Route 9: User Login
+
+# Route 8: Send WhatsApp notification
+@app.route("/api/notify-whatsapp", methods=["POST"])
+def notify_whatsapp():
+    try:
+        from twilio.rest import Client
+
+        data       = request.get_json()
+        items      = data.get("items", [])
+        total      = data.get("total", 0)
+        room       = data.get("room", "Home")
+        phone      = data.get("phone", os.getenv("YOUR_WHATSAPP"))
+
+        item_list  = "\n".join([
+            f"• {i['name']} x{i['qty']} = Rs.{int(i['price']*i['qty']):,}"
+            for i in items
+        ])
+
+        message = f"""🏠 *HomeBot AI — Order Confirmation*
+
+Room: {room}
+Items:
+{item_list}
+
+💰 Grand Total: Rs.{int(total):,}
+
+Thank you for using HomeBot AI!"""
+
+        twilio_client = Client(
+            os.getenv("TWILIO_SID"),
+            os.getenv("TWILIO_TOKEN")
+        )
+        twilio_client.messages.create(
+            from_ = os.getenv("TWILIO_WHATSAPP"),
+            to    = phone,
+            body  = message
+        )
+
+        return jsonify({
+            "message": "WhatsApp notification sent!",
+            "status":  "ok"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Route 9: User Login
 @app.route("/api/login", methods=["POST"])
 def login():
     try:
@@ -398,20 +422,22 @@ def register():
 @app.route("/api/search", methods=["GET"])
 def search_products():
     try:
-        query      = request.args.get("q", "")
-        room_id    = request.args.get("room_id", None)
-        min_price  = request.args.get("min_price", 0)
-        max_price  = request.args.get("max_price", 999999)
-        style      = request.args.get("style", None)
-        brand      = request.args.get("brand", None)
+        query     = request.args.get("q", "")
+        room_id   = request.args.get("room_id", None)
+        min_price = request.args.get("min_price", 0)
+        max_price = request.args.get("max_price", 999999)
+        style     = request.args.get("style", None)
+        brand     = request.args.get("brand", None)
 
         conn   = get_db()
         cursor = conn.cursor(
             cursor_factory=psycopg2.extras.RealDictCursor
         )
 
-        # Build dynamic SQL query
-        sql    = "SELECT p.*, r.name as room_name FROM products p JOIN rooms r ON p.room_id = r.id WHERE 1=1"
+        sql    = """SELECT p.*, r.name as room_name
+                   FROM products p
+                   JOIN rooms r ON p.room_id = r.id
+                   WHERE 1=1"""
         params = []
 
         if query:
@@ -454,7 +480,6 @@ def search_products():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # Route 12: Get all brands
 @app.route("/api/brands", methods=["GET"])
 def get_brands():
@@ -471,7 +496,6 @@ def get_brands():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # Route 13: Get all styles
 @app.route("/api/styles", methods=["GET"])
 def get_styles():
@@ -487,19 +511,18 @@ def get_styles():
         return jsonify({"styles": styles})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 # Route 14: Place order
 @app.route("/api/orders", methods=["POST"])
 def place_order():
     try:
-        data       = request.get_json()
-        user_id    = data.get("user_id", 1)
-        items      = data.get("items", [])
-        room       = data.get("room", "Home")
+        data    = request.get_json()
+        user_id = data.get("user_id", 1)
+        items   = data.get("items", [])
 
         if not items:
             return jsonify({"error": "No items in order"}), 400
 
-        # Calculate totals
         subtotal    = sum(i["price"] * i["qty"] for i in items)
         gst         = round(subtotal * 0.18, 2)
         grand_total = round(subtotal + gst, 2)
@@ -507,7 +530,6 @@ def place_order():
         conn   = get_db()
         cursor = conn.cursor()
 
-        # Insert order
         cursor.execute(
             """INSERT INTO orders
                (user_id, total_amount, gst_amount, grand_total, status)
@@ -517,7 +539,6 @@ def place_order():
         )
         order_id = cursor.fetchone()[0]
 
-        # Insert order items
         for item in items:
             cursor.execute(
                 """INSERT INTO order_items
@@ -525,8 +546,6 @@ def place_order():
                    VALUES (%s, %s, %s, %s)""",
                 (order_id, item["id"], item["qty"], item["price"])
             )
-
-            # Update stock
             cursor.execute(
                 """UPDATE products
                    SET stock_qty = stock_qty - %s
@@ -548,7 +567,6 @@ def place_order():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # Route 15: Get user orders
 @app.route("/api/orders/<int:user_id>", methods=["GET"])
 def get_orders(user_id):
@@ -558,10 +576,8 @@ def get_orders(user_id):
             cursor_factory=psycopg2.extras.RealDictCursor
         )
 
-        # Get orders
         cursor.execute(
-            """SELECT o.*,
-               COUNT(oi.id) as item_count
+            """SELECT o.*, COUNT(oi.id) as item_count
                FROM orders o
                LEFT JOIN order_items oi ON o.id = oi.order_id
                WHERE o.user_id = %s
@@ -571,7 +587,6 @@ def get_orders(user_id):
         )
         orders = cursor.fetchall()
 
-        # Get items for each order
         result = []
         for order in orders:
             cursor.execute(
@@ -582,8 +597,8 @@ def get_orders(user_id):
                 (order["id"],)
             )
             items = cursor.fetchall()
-            order_dict = dict(order)
-            order_dict["items"] = list(items)
+            order_dict             = dict(order)
+            order_dict["items"]      = list(items)
             order_dict["created_at"] = str(order["created_at"])
             result.append(order_dict)
 
@@ -594,7 +609,6 @@ def get_orders(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # Route 16: Update order status
 @app.route("/api/orders/<int:order_id>/status", methods=["PUT"])
@@ -620,6 +634,7 @@ def update_order_status(order_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 # Route 17: Track single order
 @app.route("/api/track/<int:order_id>", methods=["GET"])
 def track_order(order_id):
@@ -654,37 +669,16 @@ def track_order(order_id):
         cursor.close()
         conn.close()
 
-        order_dict = dict(order)
+        order_dict             = dict(order)
         order_dict["items"]      = list(items)
         order_dict["created_at"] = str(order["created_at"])
 
-        # Build tracking timeline
-        status = order["status"]
+        status   = order["status"]
         timeline = [
-            {
-                "step":   "Order Placed",
-                "icon":   "📋",
-                "done":   True,
-                "desc":   "Your order has been received"
-            },
-            {
-                "step":   "Processing",
-                "icon":   "⚙️",
-                "done":   status in ["processing", "shipped", "delivered"],
-                "desc":   "We are preparing your items"
-            },
-            {
-                "step":   "Shipped",
-                "icon":   "🚚",
-                "done":   status in ["shipped", "delivered"],
-                "desc":   "Your order is on the way"
-            },
-            {
-                "step":   "Delivered",
-                "icon":   "✅",
-                "done":   status == "delivered",
-                "desc":   "Order delivered successfully"
-            },
+            {"step": "Order Placed",  "icon": "📋", "done": True,                                        "desc": "Your order has been received"},
+            {"step": "Processing",    "icon": "⚙️", "done": status in ["processing","shipped","delivered"],"desc": "We are preparing your items"},
+            {"step": "Shipped",       "icon": "🚚", "done": status in ["shipped","delivered"],             "desc": "Your order is on the way"},
+            {"step": "Delivered",     "icon": "✅", "done": status == "delivered",                        "desc": "Order delivered successfully"},
         ]
 
         order_dict["timeline"] = timeline
@@ -692,7 +686,6 @@ def track_order(order_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # Route 18: Get user profile
 @app.route("/api/profile/<int:user_id>", methods=["GET"])
@@ -703,20 +696,18 @@ def get_profile(user_id):
             cursor_factory=psycopg2.extras.RealDictCursor
         )
 
-        # Get user details
         cursor.execute(
             "SELECT id, name, email, phone, city, language FROM users WHERE id = %s",
             (user_id,)
         )
         user = cursor.fetchone()
 
-        # Get order stats
         cursor.execute(
             """SELECT
                COUNT(*) as total_orders,
                COALESCE(SUM(grand_total), 0) as total_spent,
                COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered,
-               COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending
+               COUNT(CASE WHEN status = 'pending'   THEN 1 END) as pending
                FROM orders WHERE user_id = %s""",
             (user_id,)
         )
@@ -731,7 +722,6 @@ def get_profile(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # Route 19: Update user profile
 @app.route("/api/profile/<int:user_id>", methods=["PUT"])
@@ -763,7 +753,8 @@ def update_profile(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-# Route: Upload product image to Cloudinary
+
+# Route 20: Upload product image to Cloudinary
 @app.route("/api/upload-image", methods=["POST"])
 def upload_image():
     try:
@@ -782,7 +773,6 @@ def upload_image():
         file       = request.files["file"]
         product_id = request.form.get("product_id")
 
-        # Upload to Cloudinary
         result = cloudinary.uploader.upload(
             file,
             folder        = "homebot-products",
@@ -793,7 +783,6 @@ def upload_image():
 
         image_url = result["secure_url"]
 
-        # Save URL to database
         if product_id:
             conn   = get_db()
             cursor = conn.cursor()
@@ -813,9 +802,10 @@ def upload_image():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 # ── ADMIN ROUTES ──
 
-# Route: Get all products for admin
+# Route 21: Get all products for admin
 @app.route("/api/admin/products", methods=["GET"])
 def admin_get_products():
     try:
@@ -836,12 +826,11 @@ def admin_get_products():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Route: Add new product
+# Route 22: Add new product
 @app.route("/api/admin/products", methods=["POST"])
 def admin_add_product():
     try:
-        data = request.get_json()
+        data   = request.get_json()
         conn   = get_db()
         cursor = conn.cursor()
         cursor.execute(
@@ -881,8 +870,7 @@ def admin_add_product():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Route: Update product
+# Route 23: Update product
 @app.route("/api/admin/products/<int:product_id>", methods=["PUT"])
 def admin_update_product(product_id):
     try:
@@ -891,36 +879,22 @@ def admin_update_product(product_id):
         cursor = conn.cursor()
         cursor.execute(
             """UPDATE products SET
-               room_id     = %s,
-               name        = %s,
-               description = %s,
-               price       = %s,
-               unit        = %s,
-               stock_qty   = %s,
-               style_tag   = %s,
-               brand       = %s,
-               length_cm   = %s,
-               width_cm    = %s,
-               height_cm   = %s,
-               material    = %s,
-               color       = %s,
-               image_url   = %s
+               room_id     = %s, name        = %s,
+               description = %s, price       = %s,
+               unit        = %s, stock_qty   = %s,
+               style_tag   = %s, brand       = %s,
+               length_cm   = %s, width_cm    = %s,
+               height_cm   = %s, material    = %s,
+               color       = %s, image_url   = %s
                WHERE id    = %s""",
             (
-                data.get("room_id"),
-                data.get("name"),
-                data.get("description"),
-                data.get("price"),
-                data.get("unit"),
-                data.get("stock_qty"),
-                data.get("style_tag"),
-                data.get("brand"),
-                data.get("length_cm"),
-                data.get("width_cm"),
-                data.get("height_cm"),
-                data.get("material"),
-                data.get("color"),
-                data.get("image_url"),
+                data.get("room_id"),    data.get("name"),
+                data.get("description"),data.get("price"),
+                data.get("unit"),       data.get("stock_qty"),
+                data.get("style_tag"),  data.get("brand"),
+                data.get("length_cm"),  data.get("width_cm"),
+                data.get("height_cm"),  data.get("material"),
+                data.get("color"),      data.get("image_url"),
                 product_id
             )
         )
@@ -934,8 +908,7 @@ def admin_update_product(product_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Route: Delete product
+# Route 24: Delete product
 @app.route("/api/admin/products/<int:product_id>", methods=["DELETE"])
 def admin_delete_product(product_id):
     try:
@@ -955,8 +928,7 @@ def admin_delete_product(product_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Route: Get dashboard stats for admin
+# Route 25: Admin dashboard stats
 @app.route("/api/admin/stats", methods=["GET"])
 def admin_stats():
     try:
@@ -965,32 +937,25 @@ def admin_stats():
             cursor_factory=psycopg2.extras.RealDictCursor
         )
 
-        # Total products
         cursor.execute("SELECT COUNT(*) as count FROM products")
         total_products = cursor.fetchone()["count"]
 
-        # Total users
         cursor.execute("SELECT COUNT(*) as count FROM users")
         total_users = cursor.fetchone()["count"]
 
-        # Total orders
         cursor.execute("SELECT COUNT(*) as count FROM orders")
         total_orders = cursor.fetchone()["count"]
 
-        # Total revenue
         cursor.execute(
             "SELECT COALESCE(SUM(grand_total),0) as total FROM orders"
         )
         total_revenue = cursor.fetchone()["total"]
 
-        # Orders by status
         cursor.execute(
-            """SELECT status, COUNT(*) as count
-               FROM orders GROUP BY status"""
+            "SELECT status, COUNT(*) as count FROM orders GROUP BY status"
         )
         orders_by_status = cursor.fetchall()
 
-        # Top 5 products by orders
         cursor.execute(
             """SELECT p.name, SUM(oi.quantity) as total_sold
                FROM order_items oi
@@ -1001,9 +966,8 @@ def admin_stats():
         )
         top_products = cursor.fetchall()
 
-        # Revenue by room
         cursor.execute(
-            """SELECT r.name as room, 
+            """SELECT r.name as room,
                COALESCE(SUM(o.grand_total), 0) as revenue
                FROM rooms r
                LEFT JOIN products p ON p.room_id = r.id
@@ -1029,53 +993,7 @@ def admin_stats():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000) 
-    # Route 8: Send WhatsApp notification
-@app.route("/api/notify-whatsapp", methods=["POST"])
-def notify_whatsapp():
-    try:
-        from twilio.rest import Client
-
-        data       = request.get_json()
-        items      = data.get("items", [])
-        total      = data.get("total", 0)
-        room       = data.get("room", "Home")
-        phone      = data.get("phone", os.getenv("YOUR_WHATSAPP"))
-
-        # Build message
-        item_list  = "\n".join([
-            f"• {i['name']} x{i['qty']} = Rs.{int(i['price']*i['qty']):,}"
-            for i in items
-        ])
-
-        message = f"""🏠 *HomeBot AI — Order Confirmation*
-
-Room: {room}
-Items:
-{item_list}
-
-💰 Grand Total: Rs.{int(total):,}
-
-Thank you for using HomeBot AI!
-Share your PDF quote with your contractor."""
-
-        # Send WhatsApp
-        client = Client(
-            os.getenv("TWILIO_SID"),
-            os.getenv("TWILIO_TOKEN")
-        )
-        client.messages.create(
-            from_=os.getenv("TWILIO_WHATSAPP"),
-            to=phone,
-            body=message
-        )
-
-        return jsonify({
-            "message": "WhatsApp notification sent!",
-            "status": "ok"
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500  
+    app.run(debug=True, port=5000)
     
