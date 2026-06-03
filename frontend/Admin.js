@@ -16,14 +16,16 @@ const ROOMS = [
 const STYLES = ["modern", "classic", "traditional", "luxury"];
 
 export default function Admin() {
-  const [screen, setScreen]         = useState("dashboard");
-  const [stats, setStats]           = useState(null);
-  const [products, setProducts]     = useState([]);
-  const [loading, setLoading]       = useState(false);
-  const [showForm, setShowForm]     = useState(false);
-  const [editProduct, setEditProduct] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterRoom, setFilterRoom] = useState("");
+  const [screen, setScreen]             = useState("dashboard");
+  const [stats, setStats]               = useState(null);
+  const [products, setProducts]         = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [showForm, setShowForm]         = useState(false);
+  const [editProduct, setEditProduct]   = useState(null);
+  const [searchTerm, setSearchTerm]     = useState("");
+  const [filterRoom, setFilterRoom]     = useState("");
+  const [analytics, setAnalytics]       = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const emptyForm = {
     room_id: 1, name: "", description: "", price: "",
@@ -34,8 +36,9 @@ export default function Admin() {
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
-    if (screen === "dashboard") loadStats();
-    if (screen === "products")  loadProducts();
+    if (screen === "dashboard")  loadStats();
+    if (screen === "products")   loadProducts();
+    if (screen === "analytics")  loadAnalytics();
   }, [screen]);
 
   const loadStats = async () => {
@@ -56,6 +59,16 @@ export default function Admin() {
       setProducts(d.products || []);
     } catch { setProducts([]); }
     setLoading(false);
+  };
+
+  const loadAnalytics = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const r = await fetch(`${API}/api/analytics/dashboard`);
+      const d = await r.json();
+      setAnalytics(d);
+    } catch { setAnalytics(null); }
+    setAnalyticsLoading(false);
   };
 
   const saveProduct = async () => {
@@ -88,9 +101,7 @@ export default function Admin() {
         setEditProduct(null);
         setForm(emptyForm);
         loadProducts();
-      } else {
-        alert("Error: " + d.error);
-      }
+      } else alert("Error: " + d.error);
     } catch (err) { alert("Failed: " + err.message); }
   };
 
@@ -158,7 +169,8 @@ export default function Admin() {
         <div style={{ display: "flex", gap: 8 }}>
           {[
             { id: "dashboard", label: "📊 Dashboard" },
-            { id: "products",  label: "📦 Products" },
+            { id: "products",  label: "📦 Products"  },
+            { id: "analytics", label: "📈 Analytics" },
           ].map(tab => (
             <button key={tab.id} onClick={() => setScreen(tab.id)}
               style={{ padding: "6px 16px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, background: screen === tab.id ? "#BA7517" : "rgba(255,255,255,0.1)", color: "white" }}>
@@ -176,12 +188,9 @@ export default function Admin() {
             <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: "#1a1a2e" }}>
               📊 Admin Dashboard
             </div>
-
             {loading && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
-
             {stats && (
               <div>
-                {/* Stats cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                   {[
                     { label: "Total Products", value: stats.total_products,  icon: "📦", color: "#BA7517", bg: "#FFF3DC" },
@@ -196,10 +205,7 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
-
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-                  {/* Orders by status */}
                   <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
                     <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Orders by Status</div>
                     {stats.orders_by_status?.map((s, i) => (
@@ -209,8 +215,6 @@ export default function Admin() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Top products */}
                   <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
                     <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Top Products</div>
                     {stats.top_products?.map((p, i) => (
@@ -220,8 +224,6 @@ export default function Admin() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Revenue by room */}
                   <div style={{ background: "white", borderRadius: 12, padding: 20, gridColumn: "1 / -1" }}>
                     <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Revenue by Room</div>
                     {stats.revenue_by_room?.map((r, i) => (
@@ -233,13 +235,12 @@ export default function Admin() {
                         <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
                           <div style={{
                             height: "100%", borderRadius: 3, background: "#BA7517",
-                            width: `${Math.min(100, (r.revenue / Math.max(...stats.revenue_by_room.map(x => x.revenue))) * 100)}%`
+                            width: `${Math.min(100, (r.revenue / Math.max(...stats.revenue_by_room.map(x => x.revenue || 1))) * 100)}%`
                           }} />
                         </div>
                       </div>
                     ))}
                   </div>
-
                 </div>
               </div>
             )}
@@ -256,23 +257,16 @@ export default function Admin() {
                 + Add Product
               </button>
             </div>
-
-            {/* Search and filter */}
             <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-              <input
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }}
-              />
+              <input placeholder="Search products..."
+                value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }} />
               <select value={filterRoom} onChange={e => setFilterRoom(e.target.value)}
                 style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none", background: "white" }}>
                 <option value="">All Rooms</option>
                 {ROOMS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </div>
-
-            {/* Products table */}
             <div style={{ background: "white", borderRadius: 12, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -330,6 +324,119 @@ export default function Admin() {
           </div>
         )}
 
+        {/* ANALYTICS */}
+        {screen === "analytics" && (
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: "#1a1a2e" }}>
+              📈 User Analytics
+            </div>
+            {analyticsLoading && (
+              <div style={{ textAlign: "center", padding: 40 }}>Loading analytics...</div>
+            )}
+            {analytics && (
+              <div>
+                {/* Top stats */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 24 }}>
+                  {[
+                    { label: "Total Users",       value: analytics.total_users,          icon: "👥", color: "#0C447C", bg: "#E6F1FB" },
+                    { label: "Active Today",      value: analytics.active_today,         icon: "🟢", color: "#085041", bg: "#E1F5EE" },
+                    { label: "Avg Session (sec)", value: analytics.avg_session_duration, icon: "⏱️", color: "#BA7517", bg: "#FFF3DC" },
+                  ].map((s, i) => (
+                    <div key={i} style={{ background: s.bg, borderRadius: 12, padding: 20, textAlign: "center" }}>
+                      <div style={{ fontSize: 28 }}>{s.icon}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: s.color, marginTop: 6 }}>{s.value}</div>
+                      <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+                  {/* Popular rooms */}
+                  <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 16 }}>🏠 Most Visited Rooms</div>
+                    {analytics.popular_rooms?.length === 0 && (
+                      <div style={{ color: "#888", fontSize: 13 }}>No data yet — browse some rooms first!</div>
+                    )}
+                    {analytics.popular_rooms?.map((r, i) => (
+                      <div key={i} style={{ marginBottom: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                          <span>#{i+1} {r.room}</span>
+                          <span style={{ fontWeight: 600, color: "#BA7517" }}>{r.views} views</span>
+                        </div>
+                        <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3 }}>
+                          <div style={{
+                            height: "100%", borderRadius: 3, background: "#BA7517",
+                            width: `${Math.min(100, (r.views / Math.max(...analytics.popular_rooms.map(x => x.views))) * 100)}%`
+                          }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Page stats */}
+                  <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 16 }}>📱 Page Views</div>
+                    {analytics.page_stats?.length === 0 && (
+                      <div style={{ color: "#888", fontSize: 13 }}>No data yet — navigate pages first!</div>
+                    )}
+                    {analytics.page_stats?.map((p, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
+                        <span style={{ textTransform: "capitalize" }}>📄 {p.page}</span>
+                        <span style={{ fontWeight: 600, color: "#0C447C" }}>{p.views} views</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Popular products */}
+                  <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 16 }}>🔥 Most Viewed Products</div>
+                    {analytics.popular_products?.length === 0 && (
+                      <div style={{ color: "#888", fontSize: 13 }}>No data yet</div>
+                    )}
+                    {analytics.popular_products?.map((p, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
+                        <span>#{i+1} {p.product}</span>
+                        <span style={{ fontWeight: 600, color: "#BA7517" }}>{p.views} views</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cart products */}
+                  <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 16 }}>🛒 Most Added to Cart</div>
+                    {analytics.cart_products?.length === 0 && (
+                      <div style={{ color: "#888", fontSize: 13 }}>No data yet</div>
+                    )}
+                    {analytics.cart_products?.map((p, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
+                        <span>#{i+1} {p.product}</span>
+                        <span style={{ fontWeight: 600, color: "#1D9E75" }}>{p.add_count} times</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Daily orders */}
+                  <div style={{ background: "white", borderRadius: 12, padding: 20, gridColumn: "1 / -1" }}>
+                    <div style={{ fontWeight: 600, marginBottom: 16 }}>📈 Orders Last 7 Days</div>
+                    {analytics.daily_orders?.length === 0 && (
+                      <div style={{ color: "#888", fontSize: 13 }}>No orders in last 7 days</div>
+                    )}
+                    {analytics.daily_orders?.map((d, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
+                        <span>{d.date}</span>
+                        <span>{d.orders} orders</span>
+                        <span style={{ fontWeight: 600, color: "#BA7517" }}>₹{Number(d.revenue).toLocaleString("en-IN")}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       {/* Add/Edit Product Modal */}
@@ -343,108 +450,88 @@ export default function Admin() {
               <button onClick={() => { setShowForm(false); setEditProduct(null); }}
                 style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>✕</button>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={labelStyle}>Product Name *</label>
                 <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
                   placeholder="e.g. RAK Ceramic Floor Tile" style={inputStyle} />
               </div>
-
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={labelStyle}>Description</label>
                 <input value={form.description} onChange={e => setForm({...form, description: e.target.value})}
                   placeholder="Short product description" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Room *</label>
-                <select value={form.room_id} onChange={e => setForm({...form, room_id: e.target.value})}
-                  style={inputStyle}>
+                <select value={form.room_id} onChange={e => setForm({...form, room_id: e.target.value})} style={inputStyle}>
                   {ROOMS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </div>
-
               <div>
                 <label style={labelStyle}>Style</label>
-                <select value={form.style_tag} onChange={e => setForm({...form, style_tag: e.target.value})}
-                  style={inputStyle}>
+                <select value={form.style_tag} onChange={e => setForm({...form, style_tag: e.target.value})} style={inputStyle}>
                   {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-
               <div>
                 <label style={labelStyle}>Price (₹) *</label>
                 <input type="number" value={form.price}
                   onChange={e => setForm({...form, price: e.target.value})}
                   placeholder="e.g. 850" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Unit</label>
-                <select value={form.unit} onChange={e => setForm({...form, unit: e.target.value})}
-                  style={inputStyle}>
-                  {["per piece", "per set", "per sqft", "per meter", "per kg", "per bucket"].map(u => (
+                <select value={form.unit} onChange={e => setForm({...form, unit: e.target.value})} style={inputStyle}>
+                  {["per piece","per set","per sqft","per meter","per kg","per bucket"].map(u => (
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </select>
               </div>
-
               <div>
                 <label style={labelStyle}>Stock Quantity</label>
                 <input type="number" value={form.stock_qty}
                   onChange={e => setForm({...form, stock_qty: e.target.value})}
                   placeholder="e.g. 100" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Brand</label>
                 <input value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}
                   placeholder="e.g. Jaquar" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Length (cm)</label>
                 <input type="number" value={form.length_cm}
                   onChange={e => setForm({...form, length_cm: e.target.value})}
                   placeholder="e.g. 60" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Width (cm)</label>
                 <input type="number" value={form.width_cm}
                   onChange={e => setForm({...form, width_cm: e.target.value})}
                   placeholder="e.g. 30" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Height (cm)</label>
                 <input type="number" value={form.height_cm}
                   onChange={e => setForm({...form, height_cm: e.target.value})}
                   placeholder="e.g. 180" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Material</label>
                 <input value={form.material} onChange={e => setForm({...form, material: e.target.value})}
                   placeholder="e.g. Ceramic" style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Color</label>
                 <input value={form.color} onChange={e => setForm({...form, color: e.target.value})}
                   placeholder="e.g. White" style={inputStyle} />
               </div>
-
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={labelStyle}>Image URL</label>
                 <input value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})}
                   placeholder="https://res.cloudinary.com/..." style={inputStyle} />
               </div>
-
             </div>
-
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <button onClick={saveProduct}
                 style={{ flex: 1, padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>

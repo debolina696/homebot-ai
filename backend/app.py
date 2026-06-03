@@ -994,6 +994,187 @@ def admin_stats():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── ANALYTICS ROUTES ──
+
+# Route: Track user activity
+@app.route("/api/analytics/track", methods=["POST"])
+def track_activity():
+    try:
+        data       = request.get_json()
+        user_id    = data.get("user_id", 1)
+        action     = data.get("action", "")
+        room_id    = data.get("room_id", None)
+        product_id = data.get("product_id", None)
+        details    = data.get("details", "")
+
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO user_activity
+               (user_id, action, room_id, product_id, details)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (user_id, action, room_id, product_id, details)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Track page view
+@app.route("/api/analytics/pageview", methods=["POST"])
+def track_pageview():
+    try:
+        data     = request.get_json()
+        user_id  = data.get("user_id", 1)
+        page     = data.get("page", "")
+        duration = data.get("duration", 0)
+
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO page_views
+               (user_id, page, duration_sec)
+               VALUES (%s, %s, %s)""",
+            (user_id, page, duration)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get analytics data
+@app.route("/api/analytics/dashboard", methods=["GET"])
+def analytics_dashboard():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Total users
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        total_users = cursor.fetchone()["count"]
+
+        # Active users today
+        cursor.execute(
+            """SELECT COUNT(DISTINCT user_id) as count
+               FROM user_activity
+               WHERE created_at >= CURRENT_DATE"""
+        )
+        active_today = cursor.fetchone()["count"]
+
+        # Most viewed rooms
+        cursor.execute(
+            """SELECT r.name as room, COUNT(*) as views
+               FROM user_activity ua
+               JOIN rooms r ON ua.room_id = r.id
+               WHERE ua.action = 'view_room'
+               GROUP BY r.name
+               ORDER BY views DESC"""
+        )
+        popular_rooms = cursor.fetchall()
+
+        # Most viewed products
+        cursor.execute(
+            """SELECT p.name as product, p.brand,
+               COUNT(*) as views
+               FROM user_activity ua
+               JOIN products p ON ua.product_id = p.id
+               WHERE ua.action = 'view_product'
+               GROUP BY p.name, p.brand
+               ORDER BY views DESC
+               LIMIT 10"""
+        )
+        popular_products = cursor.fetchall()
+
+        # Most added to cart
+        cursor.execute(
+            """SELECT p.name as product,
+               COUNT(*) as add_count
+               FROM user_activity ua
+               JOIN products p ON ua.product_id = p.id
+               WHERE ua.action = 'add_to_cart'
+               GROUP BY p.name
+               ORDER BY add_count DESC
+               LIMIT 5"""
+        )
+        cart_products = cursor.fetchall()
+
+        # Page views by page
+        cursor.execute(
+            """SELECT page,
+               COUNT(*) as views,
+               AVG(duration_sec) as avg_duration
+               FROM page_views
+               GROUP BY page
+               ORDER BY views DESC"""
+        )
+        page_stats = cursor.fetchall()
+
+        # Orders per day last 7 days
+        cursor.execute(
+            """SELECT DATE(created_at) as date,
+               COUNT(*) as orders,
+               SUM(grand_total) as revenue
+               FROM orders
+               WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+               GROUP BY DATE(created_at)
+               ORDER BY date"""
+        )
+        daily_orders = cursor.fetchall()
+
+        # User registrations per day
+        cursor.execute(
+            """SELECT DATE(created_at) as date,
+               COUNT(*) as registrations
+               FROM users
+               WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+               GROUP BY DATE(created_at)
+               ORDER BY date"""
+        )
+        daily_registrations = cursor.fetchall()
+
+        # Average session duration
+        cursor.execute(
+            """SELECT AVG(duration_sec) as avg_duration
+               FROM page_views"""
+        )
+        avg_duration = cursor.fetchone()["avg_duration"] or 0
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_users":          total_users,
+            "active_today":         active_today,
+            "popular_rooms":        list(popular_rooms),
+            "popular_products":     list(popular_products),
+            "cart_products":        list(cart_products),
+            "page_stats":           list(page_stats),
+            "daily_orders":         [
+                {**dict(d), "date": str(d["date"]),
+                 "revenue": float(d["revenue"] or 0)}
+                for d in daily_orders
+            ],
+            "daily_registrations":  [
+                {**dict(d), "date": str(d["date"])}
+                for d in daily_registrations
+            ],
+            "avg_session_duration": round(float(avg_duration), 1)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
     
