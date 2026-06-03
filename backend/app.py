@@ -1175,6 +1175,212 @@ def analytics_dashboard():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── RECOMMENDATION ROUTES ──
+
+# Route: Get recommendations for a product
+@app.route("/api/recommendations/<int:product_id>", methods=["GET"])
+def get_recommendations(product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get current product details
+        cursor.execute(
+            """SELECT * FROM products WHERE id = %s""",
+            (product_id,)
+        )
+        current = cursor.fetchone()
+        if not current:
+            return jsonify({"recommendations": []})
+
+        # Strategy 1: Same room, similar price range
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               ABS(p.price - %s) as price_diff
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               WHERE p.room_id = %s
+               AND p.id != %s
+               ORDER BY price_diff ASC
+               LIMIT 4""",
+            (current["price"], current["room_id"], product_id)
+        )
+        same_room = cursor.fetchall()
+
+        # Strategy 2: Same style tag
+        cursor.execute(
+            """SELECT p.*, r.name as room_name
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               WHERE p.style_tag = %s
+               AND p.id != %s
+               AND p.room_id != %s
+               ORDER BY RANDOM()
+               LIMIT 4""",
+            (current["style_tag"], product_id, current["room_id"])
+        )
+        same_style = cursor.fetchall()
+
+        # Strategy 3: Frequently bought together
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               COUNT(*) as bought_together
+               FROM order_items oi1
+               JOIN order_items oi2 ON oi1.order_id = oi2.order_id
+               JOIN products p ON oi2.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               WHERE oi1.product_id = %s
+               AND oi2.product_id != %s
+               GROUP BY p.id, r.name
+               ORDER BY bought_together DESC
+               LIMIT 4""",
+            (product_id, product_id)
+        )
+        bought_together = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "same_room":       list(same_room),
+            "same_style":      list(same_style),
+            "bought_together": list(bought_together),
+            "current_product": dict(current)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get personalized recommendations for user
+@app.route("/api/recommendations/user/<int:user_id>", methods=["GET"])
+def get_user_recommendations(user_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get user's most viewed rooms
+        cursor.execute(
+            """SELECT room_id, COUNT(*) as views
+               FROM user_activity
+               WHERE user_id = %s
+               AND action = 'view_room'
+               AND room_id IS NOT NULL
+               GROUP BY room_id
+               ORDER BY views DESC
+               LIMIT 3""",
+            (user_id,)
+        )
+        fav_rooms = cursor.fetchall()
+
+        # Get user's budget range from orders
+        cursor.execute(
+            """SELECT
+               AVG(grand_total) as avg_order,
+               MAX(grand_total) as max_order
+               FROM orders
+               WHERE user_id = %s""",
+            (user_id,)
+        )
+        budget_info = cursor.fetchone()
+
+        # Get products from favorite rooms
+        recommendations = []
+        for room in fav_rooms:
+            cursor.execute(
+                """SELECT p.*, r.name as room_name
+                   FROM products p
+                   JOIN rooms r ON p.room_id = r.id
+                   WHERE p.room_id = %s
+                   ORDER BY RANDOM()
+                   LIMIT 3""",
+                (room["room_id"],)
+            )
+            prods = cursor.fetchall()
+            recommendations.extend(list(prods))
+
+        # If no history — return popular products
+        if not recommendations:
+            cursor.execute(
+                """SELECT p.*, r.name as room_name,
+                   COUNT(oi.id) as order_count
+                   FROM products p
+                   JOIN rooms r ON p.room_id = r.id
+                   LEFT JOIN order_items oi ON oi.product_id = p.id
+                   GROUP BY p.id, r.name
+                   ORDER BY order_count DESC
+                   LIMIT 8""",
+            )
+            recommendations = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "recommendations": recommendations,
+            "favorite_rooms":  list(fav_rooms),
+            "budget_info":     dict(budget_info) if budget_info else {}
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get trending products
+@app.route("/api/trending", methods=["GET"])
+def get_trending():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Most viewed in last 7 days
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               COUNT(ua.id) as view_count
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN user_activity ua
+                   ON ua.product_id = p.id
+                   AND ua.action = 'view_product'
+                   AND ua.created_at >= CURRENT_DATE - INTERVAL '7 days'
+               GROUP BY p.id, r.name
+               ORDER BY view_count DESC
+               LIMIT 8"""
+        )
+        trending = cursor.fetchall()
+
+        # Most added to cart this week
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               COUNT(ua.id) as cart_count
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN user_activity ua
+                   ON ua.product_id = p.id
+                   AND ua.action = 'add_to_cart'
+                   AND ua.created_at >= CURRENT_DATE - INTERVAL '7 days'
+               GROUP BY p.id, r.name
+               ORDER BY cart_count DESC
+               LIMIT 4"""
+        )
+        hot_items = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "trending":  list(trending),
+            "hot_items": list(hot_items)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
     

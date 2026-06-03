@@ -106,6 +106,9 @@ export default function App() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [allProducts, setAllProducts]     = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [trending, setTrending]           = useState([]);
+  const [recLoading, setRecLoading]       = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -125,8 +128,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user && screen === "orders")  loadOrders();
-    if (user && screen === "profile") loadProfile();
+    if (user && screen === "orders")          loadOrders();
+    if (user && screen === "profile")         loadProfile();
+    if (screen === "recommendations")         loadRecommendations();
     trackPage(screen);
   }, [screen, user]);
 
@@ -168,6 +172,21 @@ export default function App() {
     } catch { setAllProducts([]); }
   };
 
+  const loadRecommendations = async () => {
+    setRecLoading(true);
+    try {
+      const r = await fetch(`${API}/api/recommendations/user/${user?.id || 1}`);
+      const d = await r.json();
+      setRecommendations(d.recommendations || []);
+    } catch { setRecommendations([]); }
+    try {
+      const r = await fetch(`${API}/api/trending`);
+      const d = await r.json();
+      setTrending(d.trending || []);
+    } catch { setTrending([]); }
+    setRecLoading(false);
+  };
+
   const uploadImage = async () => {
     if (!uploadFile || !uploadProductId) {
       alert("Please select a product and image!");
@@ -186,12 +205,8 @@ export default function App() {
       if (d.status === "ok") {
         setUploadSuccess(d.image_url);
         alert("✅ Image uploaded successfully!");
-      } else {
-        alert("Error: " + d.error);
-      }
-    } catch (err) {
-      alert("Upload failed: " + err.message);
-    }
+      } else alert("Error: " + d.error);
+    } catch (err) { alert("Upload failed: " + err.message); }
     setUploadLoading(false);
   };
 
@@ -475,10 +490,32 @@ export default function App() {
           Brand: <strong>{p.brand}</strong> | Stock: {p.stock_qty}
           {p.room_name && <span style={{ color: "#BA7517" }}> | {p.room_name}</span>}
         </div>
-        <button onClick={(e) => { e.stopPropagation(); addToCart(p); }}
-          style={{ marginTop: 8, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 16px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-          + Add to Cart
-        </button>
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          <button onClick={e => { e.stopPropagation(); addToCart(p); }}
+            style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+            + Add to Cart
+          </button>
+          <button
+            onClick={async e => {
+              e.stopPropagation();
+              try {
+                const r = await fetch(`${API}/api/recommendations/${p.id}`);
+                const d = await r.json();
+                if (d.same_room?.length > 0) {
+                  alert(`Similar in ${p.room_name}:\n` +
+                    d.same_room.slice(0,3).map(x =>
+                      `• ${x.name} — ₹${Number(x.price).toLocaleString("en-IN")}`
+                    ).join("\n")
+                  );
+                } else {
+                  alert("No similar products found yet!");
+                }
+              } catch {}
+            }}
+            style={{ background: "#f0f0f0", color: "#555", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>
+            Similar →
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -626,10 +663,11 @@ export default function App() {
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 480, background: "white", display: "flex", borderTop: "1px solid #eee", zIndex: 100 }}>
         {[
-          { id: "home",    icon: "🏠", label: "Rooms" },
-          { id: "search",  icon: "🔍", label: "Search" },
-          { id: "orders",  icon: "📦", label: "Orders" },
-          { id: "profile", icon: "👤", label: "Profile" },
+          { id: "home",            icon: "🏠", label: "Rooms"   },
+          { id: "search",          icon: "🔍", label: "Search"  },
+          { id: "recommendations", icon: "✨", label: "For You" },
+          { id: "orders",          icon: "📦", label: "Orders"  },
+          { id: "profile",         icon: "👤", label: "Profile" },
         ].map(tab => (
           <button key={tab.id} onClick={() => { setScreen(tab.id); trackPage(tab.id); }}
             style={{ flex: 1, padding: "10px 0", border: "none", background: "none", cursor: "pointer", fontSize: 11, color: screen === tab.id ? "#BA7517" : "#888", fontWeight: screen === tab.id ? 600 : 400 }}>
@@ -820,6 +858,62 @@ export default function App() {
           </div>
         )}
 
+        {/* RECOMMENDATIONS */}
+        {screen === "recommendations" && (
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>✨ Recommended For You</div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 16 }}>Based on your browsing history</div>
+            {recLoading && (
+              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading recommendations...</div>
+            )}
+            {!recLoading && trending.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: "#BA7517" }}>🔥 Trending This Week</div>
+                <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
+                  {trending.map(p => (
+                    <div key={p.id}
+                      style={{ flexShrink: 0, width: 150, background: "white", borderRadius: 10, padding: 12 }}>
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name}
+                          style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6 }}
+                          onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/150x100/FFF3DC/BA7517?text=🏠"; }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 100, background: "#FFF3DC", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>🏠</div>
+                      )}
+                      <div style={{ fontWeight: 500, fontSize: 12, marginTop: 6 }}>{p.name}</div>
+                      <div style={{ color: "#BA7517", fontWeight: 600, fontSize: 13, marginTop: 2 }}>
+                        ₹{Number(p.price).toLocaleString("en-IN")}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#888" }}>{p.room_name}</div>
+                      <button onClick={() => addToCart(p)}
+                        style={{ width: "100%", marginTop: 6, background: "#BA7517", color: "white", border: "none", borderRadius: 6, padding: "4px 0", cursor: "pointer", fontSize: 11 }}>
+                        + Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!recLoading && recommendations.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: "#0C447C" }}>💡 Based on Your Interests</div>
+                {recommendations.map((p, i) => <ProductCard key={`${p.id}-${i}`} p={p} />)}
+              </div>
+            )}
+            {!recLoading && recommendations.length === 0 && trending.length === 0 && (
+              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
+                <div style={{ fontSize: 40 }}>✨</div>
+                <div style={{ marginTop: 8, fontWeight: 500 }}>No recommendations yet!</div>
+                <div style={{ fontSize: 12, marginTop: 8 }}>Browse some rooms and products first</div>
+                <button onClick={() => setScreen("home")}
+                  style={{ marginTop: 16, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 24px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                  Browse Rooms →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ORDERS */}
         {screen === "orders" && (
           <div>
@@ -1005,6 +1099,43 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* AI CHAT */}
+        {screen === "chat" && (
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>💬 AI Chat — Any language!</div>
+            <div style={{ background: "white", borderRadius: 12, padding: 12, minHeight: 350, maxHeight: 400, overflowY: "auto", marginBottom: 12 }}>
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                  <div style={{
+                    maxWidth: "80%", padding: "10px 14px", borderRadius: 12, fontSize: 14, lineHeight: 1.5,
+                    background: m.role === "user" ? "#BA7517" : "#f0f0f0",
+                    color: m.role === "user" ? "white" : "#333"
+                  }}>
+                    {m.text}
+                    {m.lang && <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>Detected: {m.lang}</div>}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 10 }}>
+                  <div style={{ background: "#f0f0f0", padding: "10px 14px", borderRadius: 12, fontSize: 14 }}>⏳ Thinking...</div>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={input} onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendMessage()}
+                placeholder="Type in Hindi, Tamil, English..."
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }} />
+              <button onClick={sendMessage}
+                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontSize: 16 }}>➤</button>
+            </div>
+            <div style={{ fontSize: 11, color: "#888", marginTop: 8, textAlign: "center" }}>
+              Try: "मुझे बाथरूम के लिए टाइल चाहिए"
+            </div>
           </div>
         )}
 
