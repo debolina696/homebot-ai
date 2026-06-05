@@ -2,19 +2,12 @@ import { useState, useEffect } from "react";
 
 const API = "http://127.0.0.1:5000";
 
-// Analytics tracking helpers
 const track = async (action, roomId = null, productId = null, details = "") => {
   try {
     await fetch(`${API}/api/analytics/track`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id:    1,
-        action,
-        room_id:    roomId,
-        product_id: productId,
-        details
-      })
+      body: JSON.stringify({ user_id: 1, action, room_id: roomId, product_id: productId, details })
     });
   } catch {}
 };
@@ -49,10 +42,22 @@ const STATUS_COLORS = {
 };
 
 const LANGUAGES = [
-  "english", "hindi", "bengali", "tamil",
-  "telugu", "marathi", "gujarati", "kannada",
-  "malayalam", "punjabi", "odia"
+  "english","hindi","bengali","tamil","telugu",
+  "marathi","gujarati","kannada","malayalam","punjabi","odia"
 ];
+
+const StarRating = ({ rating, onRate, size = 20 }) => (
+  <div style={{ display: "flex", gap: 2 }}>
+    {[1,2,3,4,5].map(star => (
+      <span key={star}
+        onClick={() => onRate && onRate(star)}
+        style={{ fontSize: size, cursor: onRate ? "pointer" : "default",
+          color: star <= rating ? "#FFB800" : "#ddd" }}>
+        ★
+      </span>
+    ))}
+  </div>
+);
 
 export default function App() {
   const [screen, setScreen]               = useState("login");
@@ -109,6 +114,22 @@ export default function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [trending, setTrending]           = useState([]);
   const [recLoading, setRecLoading]       = useState(false);
+  const [styleProfile, setStyleProfile]   = useState(null);
+  const [showStyleSetup, setShowStyleSetup] = useState(false);
+  const [stylePref, setStylePref]         = useState("modern");
+  const [budgetPref, setBudgetPref]       = useState("medium");
+  const [colorPref, setColorPref]         = useState("");
+  const [materialPref, setMaterialPref]   = useState("");
+  const [usePersonalizedChat, setUsePersonalizedChat] = useState(true);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productReviews, setProductReviews]   = useState(null);
+  const [showReviewForm, setShowReviewForm]   = useState(false);
+  const [reviewRating, setReviewRating]       = useState(5);
+  const [reviewText, setReviewText]           = useState("");
+  const [chatbotRating, setChatbotRating]     = useState(0);
+  const [showChatbotRating, setShowChatbotRating] = useState(false);
+  const [chatbotFeedback, setChatbotFeedback] = useState("");
+  const [lastAiMessage, setLastAiMessage]     = useState("");
 
   useEffect(() => {
     if (selectedRoom) {
@@ -119,24 +140,24 @@ export default function App() {
   }, [selectedRoom]);
 
   useEffect(() => {
-    fetch(`${API}/api/brands`)
-      .then(r => r.json())
-      .then(d => setBrands(d.brands || []));
-    fetch(`${API}/api/styles`)
-      .then(r => r.json())
-      .then(d => setStyles(d.styles || []));
+    fetch(`${API}/api/brands`).then(r => r.json()).then(d => setBrands(d.brands || []));
+    fetch(`${API}/api/styles`).then(r => r.json()).then(d => setStyles(d.styles || []));
   }, []);
 
   useEffect(() => {
-    if (user && screen === "orders")          loadOrders();
-    if (user && screen === "profile")         loadProfile();
-    if (screen === "recommendations")         loadRecommendations();
+    if (user && screen === "orders")      loadOrders();
+    if (user && screen === "profile")     { loadProfile(); loadStyleProfile(); }
+    if (screen === "recommendations")     loadRecommendations();
     trackPage(screen);
   }, [screen, user]);
 
   useEffect(() => {
     if (uploadScreen) loadAllProducts();
   }, [uploadScreen]);
+
+  useEffect(() => {
+    if (selectedProduct) loadProductReviews(selectedProduct.id);
+  }, [selectedProduct]);
 
   const loadOrders = async () => {
     if (!user) return;
@@ -158,10 +179,36 @@ export default function App() {
       setProfile(d);
       setEditName(d.user.name);
       setEditPhone(d.user.phone || "");
-      setEditCity(d.user.city || "");
+      setEditCity(d.user.city  || "");
       setEditLang(d.user.language || "english");
     } catch { setProfile(null); }
     setProfileLoading(false);
+  };
+
+  const loadStyleProfile = async () => {
+    try {
+      const r = await fetch(`${API}/api/personalization/${user?.id || 1}`);
+      const d = await r.json();
+      setStyleProfile(d);
+      if (d.profile) {
+        setStylePref(d.profile.favorite_style || "modern");
+        setBudgetPref(d.profile.budget_range  || "medium");
+        setColorPref(d.profile.color_pref     || "");
+        setMaterialPref(d.profile.material_pref || "");
+      }
+    } catch {}
+  };
+
+  const saveStyleProfile = async () => {
+    try {
+      const r = await fetch(`${API}/api/personalization/${user?.id || 1}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ favorite_style: stylePref, budget_range: budgetPref, color_pref: colorPref, material_pref: materialPref })
+      });
+      const d = await r.json();
+      if (d.status === "ok") { alert("✅ Style profile saved!"); setShowStyleSetup(false); loadStyleProfile(); }
+    } catch (err) { alert("Failed: " + err.message); }
   };
 
   const loadAllProducts = async () => {
@@ -187,32 +234,77 @@ export default function App() {
     setRecLoading(false);
   };
 
+  const loadProductReviews = async (productId) => {
+    try {
+      const r = await fetch(`${API}/api/reviews/${productId}`);
+      const d = await r.json();
+      setProductReviews(d);
+    } catch { setProductReviews(null); }
+  };
+
+  const submitReview = async () => {
+    if (!selectedProduct) return;
+    try {
+      const r = await fetch(`${API}/api/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id:  selectedProduct.id,
+          user_id:     user?.id || 1,
+          rating:      reviewRating,
+          review_text: reviewText
+        })
+      });
+      const d = await r.json();
+      if (d.status === "ok") {
+        alert(d.is_verified ? "✅ Verified review submitted!" : "✅ Review submitted!");
+        setShowReviewForm(false);
+        setReviewText("");
+        setReviewRating(5);
+        loadProductReviews(selectedProduct.id);
+      }
+    } catch (err) { alert("Failed: " + err.message); }
+  };
+
+  const submitChatbotRating = async () => {
+    try {
+      const r = await fetch(`${API}/api/chatbot/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id:     user?.id || 1,
+          rating:      chatbotRating,
+          feedback:    chatbotFeedback,
+          session_msg: lastAiMessage
+        })
+      });
+      const d = await r.json();
+      if (d.status === "ok") {
+        alert("✅ Thank you for your feedback!");
+        setShowChatbotRating(false);
+        setChatbotFeedback("");
+        setChatbotRating(0);
+      }
+    } catch (err) { alert("Failed: " + err.message); }
+  };
+
   const uploadImage = async () => {
-    if (!uploadFile || !uploadProductId) {
-      alert("Please select a product and image!");
-      return;
-    }
+    if (!uploadFile || !uploadProductId) { alert("Please select product and image!"); return; }
     setUploadLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
       formData.append("product_id", uploadProductId);
-      const r = await fetch(`${API}/api/upload-image`, {
-        method: "POST",
-        body: formData
-      });
+      const r = await fetch(`${API}/api/upload-image`, { method: "POST", body: formData });
       const d = await r.json();
-      if (d.status === "ok") {
-        setUploadSuccess(d.image_url);
-        alert("✅ Image uploaded successfully!");
-      } else alert("Error: " + d.error);
+      if (d.status === "ok") { setUploadSuccess(d.image_url); alert("✅ Image uploaded!"); }
+      else alert("Error: " + d.error);
     } catch (err) { alert("Upload failed: " + err.message); }
     setUploadLoading(false);
   };
 
   const trackOrderFn = async (orderId) => {
     setTrackLoading(true);
-    setTrackedOrder(null);
     try {
       const r = await fetch(`${API}/api/track/${orderId}`);
       const d = await r.json();
@@ -227,10 +319,7 @@ export default function App() {
       const r = await fetch(`${API}/api/profile/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editName, phone: editPhone,
-          city: editCity, language: editLang
-        })
+        body: JSON.stringify({ name: editName, phone: editPhone, city: editCity, language: editLang })
       });
       const d = await r.json();
       if (d.status === "ok") {
@@ -251,19 +340,13 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: user?.id || 1,
-          items: cart.map(i => ({
-            id: i.id, price: Number(i.price),
-            qty: Number(i.qty), name: i.name
-          })),
+          items: cart.map(i => ({ id: i.id, price: Number(i.price), qty: Number(i.qty), name: i.name })),
           room: selectedRoom?.name || "Home"
         })
       });
       const d = await r.json();
-      if (d.status === "ok") {
-        setOrderSuccess(d);
-        setCart([]);
-        track("place_order", null, null, `Order #${d.order_id}`);
-      } else alert("Order failed: " + d.error);
+      if (d.status === "ok") { setOrderSuccess(d); setCart([]); track("place_order", null, null, `Order #${d.order_id}`); }
+      else alert("Order failed: " + d.error);
     } catch (err) { alert("Order failed: " + err.message); }
     setOrderPlacing(false);
   };
@@ -294,8 +377,7 @@ export default function App() {
   const addToCart = (product) => {
     const exists = cart.find(i => i.id === product.id);
     if (exists) {
-      setCart(cart.map(i => i.id === product.id
-        ? { ...i, qty: i.qty + 1 } : i));
+      setCart(cart.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i));
     } else {
       setCart([...cart, { ...product, qty: 1 }]);
     }
@@ -316,21 +398,17 @@ export default function App() {
     setLoading(true);
     track("chat_message", null, null, userMsg);
     try {
-      const r = await fetch(`${API}/api/chat`, {
+      const endpoint = usePersonalizedChat ? `${API}/api/chat/personalized` : `${API}/api/chat`;
+      const r = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMsg,
-          room: selectedRoom?.name || "general",
-          budget
-        })
+        body: JSON.stringify({ message: userMsg, user_id: user?.id || 1, room: selectedRoom?.name || "general", budget })
       });
       const d = await r.json();
-      setMessages(m => [...m, {
-        role: "ai",
-        text: d.reply || "Sorry, could not process that.",
-        lang: d.detected_lang
-      }]);
+      const aiReply = d.reply || "Sorry, could not process that.";
+      setLastAiMessage(aiReply);
+      setMessages(m => [...m, { role: "ai", text: aiReply, lang: d.detected_lang, personalized: d.personalized }]);
+      setTimeout(() => setShowChatbotRating(true), 2000);
     } catch {
       setMessages(m => [...m, { role: "ai", text: "Connection error." }]);
     }
@@ -340,39 +418,22 @@ export default function App() {
   const downloadPDF = async () => {
     if (cart.length === 0) { alert("Add products first!"); return; }
     setPdfLoading(true);
-    track("download_pdf", null, null, `${cart.length} items`);
     try {
       const response = await fetch(`${API}/api/generate-pdf`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/pdf"
-        },
+        headers: { "Content-Type": "application/json", "Accept": "application/pdf" },
         body: JSON.stringify({
-          items: cart.map(i => ({
-            name: String(i.name),
-            price: Number(i.price),
-            qty: Number(i.qty)
-          })),
-          budget: Number(budget),
-          room: selectedRoom?.name || "Home"
+          items: cart.map(i => ({ name: String(i.name), price: Number(i.price), qty: Number(i.qty) })),
+          budget: Number(budget), room: selectedRoom?.name || "Home"
         })
       });
       if (!response.ok) { alert("PDF Error"); setPdfLoading(false); return; }
       const blob = await response.blob();
-      const url  = window.URL.createObjectURL(
-        new Blob([blob], { type: "application/pdf" })
-      );
-      const a         = document.createElement("a");
-      a.style.display = "none";
-      a.href          = url;
-      a.download      = "HomeBot_Quotation.pdf";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }, 100);
+      const url  = window.URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      const a    = document.createElement("a");
+      a.style.display = "none"; a.href = url; a.download = "HomeBot_Quotation.pdf";
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { window.URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
     } catch (err) { alert("PDF failed: " + err.message); }
     setPdfLoading(false);
   };
@@ -380,20 +441,13 @@ export default function App() {
   const sendWhatsApp = async () => {
     const phone = prompt("Enter WhatsApp number:\nExample: +919876543210");
     if (!phone) return;
-    track("whatsapp_quote", null, null, phone);
     try {
       const r = await fetch(`${API}/api/notify-whatsapp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cart.map(i => ({
-            name: i.name,
-            price: Number(i.price),
-            qty: Number(i.qty)
-          })),
-          total: grandTotal,
-          room: selectedRoom?.name || "Home",
-          phone: `whatsapp:${phone}`
+          items: cart.map(i => ({ name: i.name, price: Number(i.price), qty: Number(i.qty) })),
+          total: grandTotal, room: selectedRoom?.name || "Home", phone: `whatsapp:${phone}`
         })
       });
       const d = await r.json();
@@ -407,17 +461,11 @@ export default function App() {
       const r = await fetch(`${API}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPassword
-        })
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
       });
       const d = await r.json();
-      if (d.status === "ok") {
-        setUser(d.user);
-        setScreen("home");
-        track("login", null, null, d.user.name);
-      } else setLoginError(d.message || "Login failed");
+      if (d.status === "ok") { setUser(d.user); setScreen("home"); track("login", null, null, d.user.name); }
+      else setLoginError(d.message || "Login failed");
     } catch { setLoginError("Connection error."); }
   };
 
@@ -426,35 +474,20 @@ export default function App() {
       const r = await fetch(`${API}/api/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: regName, email: regEmail,
-          password: regPassword, phone: regPhone,
-          city: regCity, language: "english"
-        })
+        body: JSON.stringify({ name: regName, email: regEmail, password: regPassword, phone: regPhone, city: regCity, language: "english" })
       });
       const d = await r.json();
-      if (d.status === "ok") {
-        alert("✅ Registered! Please login.");
-        setShowRegister(false);
-      } else alert("Error: " + d.error);
+      if (d.status === "ok") { alert("✅ Registered! Please login."); setShowRegister(false); }
+      else alert("Error: " + d.error);
     } catch (err) { alert("Failed: " + err.message); }
   };
 
-  const inputStyle = {
-    width: "100%", padding: "10px 14px", borderRadius: 8,
-    border: "1px solid #ddd", fontSize: 14, marginBottom: 12,
-    outline: "none", boxSizing: "border-box"
-  };
-
-  const selectStyle = {
-    width: "100%", padding: "10px 14px", borderRadius: 8,
-    border: "1px solid #ddd", fontSize: 14, marginBottom: 12,
-    outline: "none", background: "white", boxSizing: "border-box"
-  };
+  const inputStyle  = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, marginBottom: 12, outline: "none", boxSizing: "border-box" };
+  const selectStyle = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, marginBottom: 12, outline: "none", background: "white", boxSizing: "border-box" };
 
   const ProductCard = ({ p }) => (
     <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12 }}
-      onClick={() => track("view_product", p.room_id, p.id, p.name)}>
+      onClick={() => { track("view_product", p.room_id, p.id, p.name); setSelectedProduct(p); setScreen("product_detail"); }}>
       <div style={{ flexShrink: 0 }}>
         {p.image_url ? (
           <img src={p.image_url} alt={p.name}
@@ -471,13 +504,15 @@ export default function App() {
           ₹{Number(p.price).toLocaleString("en-IN")}
           <span style={{ fontSize: 11, color: "#888", fontWeight: 400 }}> / {p.unit}</span>
         </div>
+        {(p.avg_rating > 0) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+            <StarRating rating={Math.round(p.avg_rating)} size={14} />
+            <span style={{ fontSize: 11, color: "#888" }}>({p.review_count || 0})</span>
+          </div>
+        )}
         {(p.length_cm || p.width_cm || p.height_cm) && (
           <div style={{ fontSize: 11, color: "#555", marginTop: 4, background: "#f8f8f8", borderRadius: 6, padding: "3px 8px", display: "inline-block" }}>
-            📐 {[
-              p.length_cm && `L:${p.length_cm}cm`,
-              p.width_cm  && `W:${p.width_cm}cm`,
-              p.height_cm && `H:${p.height_cm}cm`
-            ].filter(Boolean).join(" × ")}
+            📐 {[p.length_cm && `L:${p.length_cm}cm`, p.width_cm && `W:${p.width_cm}cm`, p.height_cm && `H:${p.height_cm}cm`].filter(Boolean).join(" × ")}
           </div>
         )}
         {(p.material || p.color) && (
@@ -490,37 +525,15 @@ export default function App() {
           Brand: <strong>{p.brand}</strong> | Stock: {p.stock_qty}
           {p.room_name && <span style={{ color: "#BA7517" }}> | {p.room_name}</span>}
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          <button onClick={e => { e.stopPropagation(); addToCart(p); }}
-            style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-            + Add to Cart
-          </button>
-          <button
-            onClick={async e => {
-              e.stopPropagation();
-              try {
-                const r = await fetch(`${API}/api/recommendations/${p.id}`);
-                const d = await r.json();
-                if (d.same_room?.length > 0) {
-                  alert(`Similar in ${p.room_name}:\n` +
-                    d.same_room.slice(0,3).map(x =>
-                      `• ${x.name} — ₹${Number(x.price).toLocaleString("en-IN")}`
-                    ).join("\n")
-                  );
-                } else {
-                  alert("No similar products found yet!");
-                }
-              } catch {}
-            }}
-            style={{ background: "#f0f0f0", color: "#555", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11 }}>
-            Similar →
-          </button>
-        </div>
+        <button onClick={e => { e.stopPropagation(); addToCart(p); }}
+          style={{ marginTop: 8, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+          + Add to Cart
+        </button>
       </div>
     </div>
   );
 
-  // ── LOGIN SCREEN ──
+  // ── LOGIN ──
   if (screen === "login") {
     return (
       <div style={{ fontFamily: "sans-serif", maxWidth: 400, margin: "0 auto", padding: "40px 20px", background: "#f8f9fa", minHeight: "100vh" }}>
@@ -532,41 +545,35 @@ export default function App() {
         {!showRegister ? (
           <div style={{ background: "white", borderRadius: 16, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20 }}>Login</div>
-            <input placeholder="Email" value={loginEmail}
-              onChange={e => setLoginEmail(e.target.value)} style={inputStyle} />
+            <input placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} style={inputStyle} />
             <input type="password" placeholder="Password" value={loginPassword}
               onChange={e => setLoginPassword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
-              style={inputStyle} />
+              onKeyDown={e => e.key === "Enter" && handleLogin()} style={inputStyle} />
             {loginError && <div style={{ color: "red", fontSize: 13, marginBottom: 10 }}>{loginError}</div>}
             <button onClick={handleLogin}
               style={{ width: "100%", padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 12 }}>
               Login →
             </button>
-            <div style={{ textAlign: "center", fontSize: 13, color: "#888", marginBottom: 12 }}>
-              Test: rahul@gmail.com / homebot123
-            </div>
+            <div style={{ textAlign: "center", fontSize: 13, color: "#888", marginBottom: 12 }}>Test: rahul@gmail.com / homebot123</div>
             <div style={{ textAlign: "center" }}>
               <span style={{ fontSize: 13, color: "#888" }}>New user? </span>
-              <span onClick={() => setShowRegister(true)}
-                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer", fontWeight: 500 }}>Register</span>
+              <span onClick={() => setShowRegister(true)} style={{ fontSize: 13, color: "#BA7517", cursor: "pointer", fontWeight: 500 }}>Register</span>
             </div>
           </div>
         ) : (
           <div style={{ background: "white", borderRadius: 16, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20 }}>Create Account</div>
-            <input placeholder="Full name" value={regName} onChange={e => setRegName(e.target.value)} style={inputStyle} />
-            <input placeholder="Email" value={regEmail} onChange={e => setRegEmail(e.target.value)} style={inputStyle} />
+            <input placeholder="Full name"  value={regName}     onChange={e => setRegName(e.target.value)}     style={inputStyle} />
+            <input placeholder="Email"      value={regEmail}    onChange={e => setRegEmail(e.target.value)}    style={inputStyle} />
             <input type="password" placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} style={inputStyle} />
-            <input placeholder="Phone" value={regPhone} onChange={e => setRegPhone(e.target.value)} style={inputStyle} />
-            <input placeholder="City" value={regCity} onChange={e => setRegCity(e.target.value)} style={inputStyle} />
+            <input placeholder="Phone"      value={regPhone}    onChange={e => setRegPhone(e.target.value)}    style={inputStyle} />
+            <input placeholder="City"       value={regCity}     onChange={e => setRegCity(e.target.value)}     style={inputStyle} />
             <button onClick={handleRegister}
               style={{ width: "100%", padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 12 }}>
               Register →
             </button>
             <div style={{ textAlign: "center" }}>
-              <span onClick={() => setShowRegister(false)}
-                style={{ fontSize: 13, color: "#BA7517", cursor: "pointer" }}>← Back to Login</span>
+              <span onClick={() => setShowRegister(false)} style={{ fontSize: 13, color: "#BA7517", cursor: "pointer" }}>← Back to Login</span>
             </div>
           </div>
         )}
@@ -574,24 +581,18 @@ export default function App() {
     );
   }
 
-  // ── ORDER TRACKING SCREEN ──
+  // ── ORDER TRACKING ──
   if (screen === "track" && trackedOrder) {
     return (
       <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto", background: "#f8f9fa", minHeight: "100vh" }}>
         <div style={{ background: "#BA7517", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setScreen("orders")}
-            style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>←</button>
+          <button onClick={() => setScreen("orders")} style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>←</button>
           <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>Track Order #{trackedOrder.id}</div>
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, textAlign: "center" }}>
             <div style={{ fontSize: 13, color: "#888" }}>Current Status</div>
-            <div style={{
-              display: "inline-block", marginTop: 8,
-              background: STATUS_COLORS[trackedOrder.status]?.bg || "#f0f0f0",
-              color:      STATUS_COLORS[trackedOrder.status]?.color || "#333",
-              borderRadius: 20, padding: "6px 20px", fontSize: 15, fontWeight: 600
-            }}>
+            <div style={{ display: "inline-block", marginTop: 8, background: STATUS_COLORS[trackedOrder.status]?.bg || "#f0f0f0", color: STATUS_COLORS[trackedOrder.status]?.color || "#333", borderRadius: 20, padding: "6px 20px", fontSize: 15, fontWeight: 600 }}>
               {trackedOrder.status?.toUpperCase()}
             </div>
           </div>
@@ -599,9 +600,7 @@ export default function App() {
             <div style={{ fontWeight: 600, marginBottom: 16 }}>Order Timeline</div>
             {trackedOrder.timeline?.map((step, i) => (
               <div key={i} style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, background: step.done ? "#E1F5EE" : "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                  {step.icon}
-                </div>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, background: step.done ? "#E1F5EE" : "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{step.icon}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14, color: step.done ? "#085041" : "#888" }}>
                     {step.step}{step.done && <span style={{ marginLeft: 6, color: "#1D9E75" }}>✓</span>}
@@ -619,9 +618,7 @@ export default function App() {
                   <div style={{ fontWeight: 500 }}>{item.product_name}</div>
                   <div style={{ color: "#888", fontSize: 12 }}>Brand: {item.brand} | Qty: {item.quantity}</div>
                 </div>
-                <div style={{ fontWeight: 600, color: "#BA7517" }}>
-                  ₹{(item.price * item.quantity).toLocaleString("en-IN")}
-                </div>
+                <div style={{ fontWeight: 600, color: "#BA7517" }}>₹{(item.price * item.quantity).toLocaleString("en-IN")}</div>
               </div>
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontWeight: 700, fontSize: 15 }}>
@@ -640,6 +637,167 @@ export default function App() {
     );
   }
 
+  // ── PRODUCT DETAIL PAGE ──
+  if (screen === "product_detail" && selectedProduct) {
+    const avgRating = productReviews?.summary?.avg_rating || 0;
+    const totalReviews = productReviews?.summary?.total_reviews || 0;
+    return (
+      <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto", background: "#f8f9fa", minHeight: "100vh" }}>
+        <div style={{ background: "#BA7517", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setScreen("products")}
+            style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>←</button>
+          <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>Product Details</div>
+        </div>
+        <div style={{ padding: 16 }}>
+
+          {/* Product Image */}
+          <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, textAlign: "center" }}>
+            {selectedProduct.image_url ? (
+              <img src={selectedProduct.image_url} alt={selectedProduct.name}
+                style={{ width: "100%", maxHeight: 250, objectFit: "cover", borderRadius: 8 }}
+                onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/400x250/FFF3DC/BA7517?text=🏠"; }} />
+            ) : (
+              <div style={{ width: "100%", height: 200, background: "#FFF3DC", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🏠</div>
+            )}
+          </div>
+
+          {/* Product Info */}
+          <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>{selectedProduct.name}</div>
+            <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{selectedProduct.description}</div>
+            <div style={{ color: "#BA7517", fontWeight: 700, fontSize: 22, marginTop: 8 }}>
+              ₹{Number(selectedProduct.price).toLocaleString("en-IN")}
+              <span style={{ fontSize: 13, color: "#888", fontWeight: 400 }}> / {selectedProduct.unit}</span>
+            </div>
+
+            {/* Rating summary */}
+            {totalReviews > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <StarRating rating={Math.round(avgRating)} size={18} />
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{Number(avgRating).toFixed(1)}</span>
+                <span style={{ fontSize: 13, color: "#888" }}>({totalReviews} reviews)</span>
+              </div>
+            )}
+
+            {/* Specs */}
+            <div style={{ marginTop: 12 }}>
+              {[
+                { label: "Brand",    value: selectedProduct.brand },
+                { label: "Material", value: selectedProduct.material },
+                { label: "Color",    value: selectedProduct.color },
+                { label: "Stock",    value: `${selectedProduct.stock_qty} units` },
+                selectedProduct.length_cm && { label: "Dimensions", value: `L:${selectedProduct.length_cm} × W:${selectedProduct.width_cm} × H:${selectedProduct.height_cm} cm` },
+              ].filter(Boolean).map((spec, i) => spec.value && (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
+                  <span style={{ color: "#888" }}>{spec.label}</span>
+                  <span style={{ fontWeight: 500 }}>{spec.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Buttons */}
+            <button onClick={() => addToCart(selectedProduct)}
+              style={{ width: "100%", marginTop: 16, background: "#BA7517", color: "white", border: "none", borderRadius: 10, padding: 14, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+              + Add to Cart
+            </button>
+          </div>
+
+          {/* Reviews Section */}
+          <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>⭐ Customer Reviews</div>
+              <button onClick={() => setShowReviewForm(true)}
+                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12 }}>
+                Write Review
+              </button>
+            </div>
+
+            {/* Rating breakdown */}
+            {productReviews?.summary && totalReviews > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                  <div style={{ fontSize: 40, fontWeight: 700, color: "#BA7517" }}>{Number(avgRating).toFixed(1)}</div>
+                  <div>
+                    <StarRating rating={Math.round(avgRating)} size={20} />
+                    <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{totalReviews} reviews</div>
+                  </div>
+                </div>
+                {[5,4,3,2,1].map(star => (
+                  <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, width: 30 }}>{star}★</span>
+                    <div style={{ flex: 1, height: 6, background: "#f0f0f0", borderRadius: 3 }}>
+                      <div style={{
+                        height: "100%", borderRadius: 3, background: "#FFB800",
+                        width: `${totalReviews > 0 ? (productReviews.summary[`${["one","two","three","four","five"][star-1]}_star`] / totalReviews) * 100 : 0}%`
+                      }} />
+                    </div>
+                    <span style={{ fontSize: 12, color: "#888", width: 20 }}>
+                      {productReviews.summary[`${["one","two","three","four","five"][star-1]}_star`]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Review list */}
+            {productReviews?.reviews?.length === 0 && (
+              <div style={{ textAlign: "center", padding: 20, color: "#888", fontSize: 13 }}>
+                No reviews yet — be the first to review!
+              </div>
+            )}
+            {productReviews?.reviews?.map((review, i) => (
+              <div key={i} style={{ padding: "12px 0", borderBottom: "0.5px solid #f0f0f0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>👤</div>
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: 13 }}>{review.user_name}</div>
+                      {review.is_verified && (
+                        <div style={{ fontSize: 10, color: "#085041", background: "#E1F5EE", borderRadius: 4, padding: "1px 6px", display: "inline-block" }}>
+                          ✓ Verified Purchase
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <StarRating rating={review.rating} size={14} />
+                </div>
+                <div style={{ fontSize: 13, color: "#555", marginTop: 8, lineHeight: 1.5 }}>{review.review_text}</div>
+                <div style={{ fontSize: 11, color: "#888", marginTop: 6 }}>
+                  {new Date(review.created_at).toLocaleDateString("en-IN")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Review Form Modal */}
+        {showReviewForm && (
+          <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ background: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 400 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>⭐ Write a Review</div>
+                <button onClick={() => setShowReviewForm(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>✕</button>
+              </div>
+              <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>Your Rating</div>
+              <StarRating rating={reviewRating} onRate={setReviewRating} size={32} />
+              <div style={{ fontSize: 13, color: "#888", marginTop: 16, marginBottom: 8 }}>Your Review</div>
+              <textarea
+                value={reviewText}
+                onChange={e => setReviewText(e.target.value)}
+                placeholder="Share your experience with this product..."
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, minHeight: 100, outline: "none", resize: "none", boxSizing: "border-box" }}
+              />
+              <button onClick={submitReview}
+                style={{ width: "100%", marginTop: 16, padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                Submit Review ⭐
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── MAIN APP ──
   return (
     <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto", background: "#f8f9fa", minHeight: "100vh" }}>
@@ -648,9 +806,7 @@ export default function App() {
       <div style={{ background: "#BA7517", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ color: "white", fontWeight: 600, fontSize: 18 }}>🏠 HomeBot AI</div>
-          <div style={{ color: "#FFE0A0", fontSize: 12 }}>
-            {user ? `Welcome, ${user.name}!` : "Interior Design Assistant"}
-          </div>
+          <div style={{ color: "#FFE0A0", fontSize: 12 }}>{user ? `Welcome, ${user.name}!` : "Interior Design Assistant"}</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ background: "white", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "#BA7517", fontWeight: 500, cursor: "pointer" }}
@@ -665,8 +821,8 @@ export default function App() {
         {[
           { id: "home",            icon: "🏠", label: "Rooms"   },
           { id: "search",          icon: "🔍", label: "Search"  },
+          { id: "chat",            icon: "💬", label: "AI Chat" },
           { id: "recommendations", icon: "✨", label: "For You" },
-          { id: "orders",          icon: "📦", label: "Orders"  },
           { id: "profile",         icon: "👤", label: "Profile" },
         ].map(tab => (
           <button key={tab.id} onClick={() => { setScreen(tab.id); trackPage(tab.id); }}
@@ -690,13 +846,10 @@ export default function App() {
             <select value={uploadProductId} onChange={e => setUploadProductId(e.target.value)}
               style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, outline: "none", background: "white" }}>
               <option value="">-- Select a product --</option>
-              {allProducts.map(p => (
-                <option key={p.id} value={p.id}>{p.name} ({p.room_name})</option>
-              ))}
+              {allProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.room_name})</option>)}
             </select>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Select Image</div>
-            <input type="file" accept="image/*"
-              onChange={e => setUploadFile(e.target.files[0])}
+            <input type="file" accept="image/*" onChange={e => setUploadFile(e.target.files[0])}
               style={{ width: "100%", marginBottom: 16, fontSize: 13 }} />
             {uploadFile && (
               <div style={{ marginBottom: 16, textAlign: "center" }}>
@@ -707,8 +860,7 @@ export default function App() {
             )}
             {uploadSuccess && (
               <div style={{ background: "#E1F5EE", borderRadius: 8, padding: 10, marginBottom: 12, textAlign: "center" }}>
-                <img src={uploadSuccess} alt="uploaded"
-                  style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6 }} />
+                <img src={uploadSuccess} alt="uploaded" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 6 }} />
                 <div style={{ fontSize: 12, color: "#085041", marginTop: 4 }}>✅ Uploaded!</div>
               </div>
             )}
@@ -717,6 +869,64 @@ export default function App() {
               {uploadLoading ? "⏳ Uploading..." : "📤 Upload Image"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Style Profile Modal */}
+      {showStyleSetup && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 400, maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>🎨 My Style Profile</div>
+              <button onClick={() => setShowStyleSetup(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Preferred Style</div>
+            <select value={stylePref} onChange={e => setStylePref(e.target.value)} style={selectStyle}>
+              {["modern","classic","traditional","luxury","minimalist"].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Budget Range</div>
+            <select value={budgetPref} onChange={e => setBudgetPref(e.target.value)} style={selectStyle}>
+              <option value="low">Low — Under ₹50,000</option>
+              <option value="medium">Medium — ₹50,000 to ₹2,00,000</option>
+              <option value="high">High — ₹2,00,000 to ₹5,00,000</option>
+              <option value="luxury">Luxury — Above ₹5,00,000</option>
+            </select>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Favorite Color</div>
+            <input value={colorPref} onChange={e => setColorPref(e.target.value)} placeholder="e.g. White, Beige, Grey" style={inputStyle} />
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Favorite Material</div>
+            <input value={materialPref} onChange={e => setMaterialPref(e.target.value)} placeholder="e.g. Marble, Wood, Steel" style={inputStyle} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <input type="checkbox" checked={usePersonalizedChat} onChange={e => setUsePersonalizedChat(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: "#BA7517" }} />
+              <span style={{ fontSize: 13 }}>Use personalized AI chat</span>
+            </div>
+            <button onClick={saveStyleProfile}
+              style={{ width: "100%", padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              💾 Save Style Profile
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Chatbot Rating Modal */}
+      {showChatbotRating && (
+        <div style={{ position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 400, background: "white", borderRadius: 16, padding: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", zIndex: 150 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>💬 Rate this response</div>
+            <button onClick={() => setShowChatbotRating(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#888" }}>✕</button>
+          </div>
+          <StarRating rating={chatbotRating} onRate={setChatbotRating} size={28} />
+          {chatbotRating > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <input value={chatbotFeedback} onChange={e => setChatbotFeedback(e.target.value)}
+                placeholder="Optional feedback..."
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
+              <button onClick={submitChatbotRating}
+                style={{ width: "100%", padding: 10, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Submit Feedback
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -731,12 +941,7 @@ export default function App() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {ROOMS.map(room => (
                 <div key={room.id}
-                  onClick={() => {
-                    setRoom(room);
-                    setScreen("products");
-                    track("view_room", room.id, null, room.name);
-                    trackPage("products");
-                  }}
+                  onClick={() => { setRoom(room); setScreen("products"); track("view_room", room.id, null, room.name); trackPage("products"); }}
                   style={{ background: selectedRoom?.id === room.id ? "#FFF3DC" : "white", border: selectedRoom?.id === room.id ? "2px solid #BA7517" : "1px solid #eee", borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 32 }}>{room.icon}</div>
                   <div style={{ fontSize: 14, fontWeight: 500, marginTop: 6 }}>{room.name}</div>
@@ -800,8 +1005,7 @@ export default function App() {
                 {showFilters ? "Hide Filters ▲" : "Show Filters ▼"}
               </button>
               {(filterRoom || filterMin || filterMax || filterStyle || filterBrand) && (
-                <button onClick={clearFilters}
-                  style={{ fontSize: 12, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>Clear all ✕</button>
+                <button onClick={clearFilters} style={{ fontSize: 12, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>Clear all ✕</button>
               )}
             </div>
             {showFilters && (
@@ -858,21 +1062,61 @@ export default function App() {
           </div>
         )}
 
+        {/* AI CHAT */}
+        {screen === "chat" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>💬 AI Chat</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {usePersonalizedChat && (
+                  <div style={{ background: "#FFF3DC", color: "#BA7517", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>✨ Personalized</div>
+                )}
+                <button onClick={() => setShowStyleSetup(true)}
+                  style={{ background: "#f0f0f0", border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>🎨 Style</button>
+              </div>
+            </div>
+            <div style={{ background: "white", borderRadius: 12, padding: 12, minHeight: 350, maxHeight: 400, overflowY: "auto", marginBottom: 12 }}>
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                  <div style={{ maxWidth: "80%", padding: "10px 14px", borderRadius: 12, fontSize: 14, lineHeight: 1.5, background: m.role === "user" ? "#BA7517" : "#f0f0f0", color: m.role === "user" ? "white" : "#333" }}>
+                    {m.text}
+                    {m.lang && <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>Detected: {m.lang}</div>}
+                    {m.personalized && <div style={{ fontSize: 10, marginTop: 2, color: "#BA7517" }}>✨ Personalized</div>}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 10 }}>
+                  <div style={{ background: "#f0f0f0", padding: "10px 14px", borderRadius: 12, fontSize: 14 }}>⏳ Thinking...</div>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={input} onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendMessage()}
+                placeholder="Type in Hindi, Tamil, English..."
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }} />
+              <button onClick={sendMessage}
+                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontSize: 16 }}>➤</button>
+            </div>
+            <div style={{ fontSize: 11, color: "#888", marginTop: 8, textAlign: "center" }}>
+              Try: "मुझे बाथरूम के लिए टाइल चाहिए"
+            </div>
+          </div>
+        )}
+
         {/* RECOMMENDATIONS */}
         {screen === "recommendations" && (
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>✨ Recommended For You</div>
             <div style={{ fontSize: 13, color: "#888", marginBottom: 16 }}>Based on your browsing history</div>
-            {recLoading && (
-              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading recommendations...</div>
-            )}
+            {recLoading && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
             {!recLoading && trending.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: "#BA7517" }}>🔥 Trending This Week</div>
                 <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
                   {trending.map(p => (
-                    <div key={p.id}
-                      style={{ flexShrink: 0, width: 150, background: "white", borderRadius: 10, padding: 12 }}>
+                    <div key={p.id} style={{ flexShrink: 0, width: 150, background: "white", borderRadius: 10, padding: 12 }}>
                       {p.image_url ? (
                         <img src={p.image_url} alt={p.name}
                           style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6 }}
@@ -881,9 +1125,7 @@ export default function App() {
                         <div style={{ width: "100%", height: 100, background: "#FFF3DC", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>🏠</div>
                       )}
                       <div style={{ fontWeight: 500, fontSize: 12, marginTop: 6 }}>{p.name}</div>
-                      <div style={{ color: "#BA7517", fontWeight: 600, fontSize: 13, marginTop: 2 }}>
-                        ₹{Number(p.price).toLocaleString("en-IN")}
-                      </div>
+                      <div style={{ color: "#BA7517", fontWeight: 600, fontSize: 13, marginTop: 2 }}>₹{Number(p.price).toLocaleString("en-IN")}</div>
                       <div style={{ fontSize: 10, color: "#888" }}>{p.room_name}</div>
                       <button onClick={() => addToCart(p)}
                         style={{ width: "100%", marginTop: 6, background: "#BA7517", color: "white", border: "none", borderRadius: 6, padding: "4px 0", cursor: "pointer", fontSize: 11 }}>
@@ -904,7 +1146,7 @@ export default function App() {
               <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
                 <div style={{ fontSize: 40 }}>✨</div>
                 <div style={{ marginTop: 8, fontWeight: 500 }}>No recommendations yet!</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>Browse some rooms and products first</div>
+                <div style={{ fontSize: 12, marginTop: 8 }}>Browse some rooms first</div>
                 <button onClick={() => setScreen("home")}
                   style={{ marginTop: 16, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 24px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                   Browse Rooms →
@@ -934,9 +1176,7 @@ export default function App() {
                       <div style={{ fontWeight: 600, fontSize: 14 }}>Order #{order.id}</div>
                       <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{new Date(order.created_at).toLocaleDateString("en-IN")}</div>
                     </div>
-                    <div style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>
-                      {order.status}
-                    </div>
+                    <div style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>{order.status}</div>
                   </div>
                   {order.items?.map((item, i) => (
                     <div key={i} style={{ fontSize: 13, color: "#555", padding: "4px 0", borderBottom: "0.5px solid #f0f0f0" }}>
@@ -968,15 +1208,13 @@ export default function App() {
                   <div style={{ fontWeight: 600, fontSize: 18, marginTop: 10 }}>{profile.user.name}</div>
                   <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{profile.user.email}</div>
                   <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>📍 {profile.user.city || "City not set"}</div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
                     <button onClick={() => setEditProfile(true)}
-                      style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
-                      ✏️ Edit Profile
-                    </button>
+                      style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13 }}>✏️ Edit</button>
                     <button onClick={() => setUploadScreen(true)}
-                      style={{ background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
-                      📸 Upload Images
-                    </button>
+                      style={{ background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13 }}>📸 Images</button>
+                    <button onClick={() => setShowStyleSetup(true)}
+                      style={{ background: "#FFF3DC", color: "#BA7517", border: "1px solid #BA7517", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13 }}>🎨 Style</button>
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
@@ -1012,11 +1250,11 @@ export default function App() {
               <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
                 <div style={{ fontWeight: 600, marginBottom: 16 }}>✏️ Edit Profile</div>
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Full Name</div>
-                <input value={editName} onChange={e => setEditName(e.target.value)} style={inputStyle} />
+                <input value={editName}  onChange={e => setEditName(e.target.value)}  style={inputStyle} />
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Phone</div>
                 <input value={editPhone} onChange={e => setEditPhone(e.target.value)} style={inputStyle} />
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>City</div>
-                <input value={editCity} onChange={e => setEditCity(e.target.value)} style={inputStyle} />
+                <input value={editCity}  onChange={e => setEditCity(e.target.value)}  style={inputStyle} />
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Preferred Language</div>
                 <select value={editLang} onChange={e => setEditLang(e.target.value)} style={selectStyle}>
                   {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
@@ -1043,9 +1281,7 @@ export default function App() {
                 <div style={{ fontSize: 32 }}>🎉</div>
                 <div style={{ fontWeight: 600, color: "#085041", marginTop: 8 }}>Order Placed!</div>
                 <div style={{ fontSize: 13, color: "#085041", marginTop: 4 }}>Order ID: #{orderSuccess.order_id}</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#085041", marginTop: 4 }}>
-                  Total: ₹{Number(orderSuccess.grand_total).toLocaleString("en-IN")}
-                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#085041", marginTop: 4 }}>Total: ₹{Number(orderSuccess.grand_total).toLocaleString("en-IN")}</div>
                 <button onClick={() => { setOrderSuccess(null); setScreen("orders"); }}
                   style={{ marginTop: 12, background: "#1D9E75", color: "white", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer", fontSize: 13 }}>
                   View Orders →
@@ -1062,9 +1298,7 @@ export default function App() {
               <div key={item.id} style={{ background: "white", borderRadius: 12, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14 }}>{item.name}</div>
-                  <div style={{ color: "#BA7517", fontSize: 13, marginTop: 2 }}>
-                    ₹{Number(item.price).toLocaleString("en-IN")} × {item.qty}
-                  </div>
+                  <div style={{ color: "#BA7517", fontSize: 13, marginTop: 2 }}>₹{Number(item.price).toLocaleString("en-IN")} × {item.qty}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ fontWeight: 600 }}>₹{(item.price * item.qty).toLocaleString("en-IN")}</div>
@@ -1099,43 +1333,6 @@ export default function App() {
                 </button>
               </div>
             )}
-          </div>
-        )}
-
-        {/* AI CHAT */}
-        {screen === "chat" && (
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>💬 AI Chat — Any language!</div>
-            <div style={{ background: "white", borderRadius: 12, padding: 12, minHeight: 350, maxHeight: 400, overflowY: "auto", marginBottom: 12 }}>
-              {messages.map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 10 }}>
-                  <div style={{
-                    maxWidth: "80%", padding: "10px 14px", borderRadius: 12, fontSize: 14, lineHeight: 1.5,
-                    background: m.role === "user" ? "#BA7517" : "#f0f0f0",
-                    color: m.role === "user" ? "white" : "#333"
-                  }}>
-                    {m.text}
-                    {m.lang && <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>Detected: {m.lang}</div>}
-                  </div>
-                </div>
-              ))}
-              {loading && (
-                <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 10 }}>
-                  <div style={{ background: "#f0f0f0", padding: "10px 14px", borderRadius: 12, fontSize: 14 }}>⏳ Thinking...</div>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={input} onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && sendMessage()}
-                placeholder="Type in Hindi, Tamil, English..."
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }} />
-              <button onClick={sendMessage}
-                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontSize: 16 }}>➤</button>
-            </div>
-            <div style={{ fontSize: 11, color: "#888", marginTop: 8, textAlign: "center" }}>
-              Try: "मुझे बाथरूम के लिए टाइल चाहिए"
-            </div>
           </div>
         )}
 

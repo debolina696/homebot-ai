@@ -913,6 +913,466 @@ def get_trending():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── PERSONALIZATION ROUTES ──
 
+# Route: Get user style profile
+@app.route("/api/personalization/<int:user_id>", methods=["GET"])
+def get_personalization(user_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get or create style profile
+        cursor.execute(
+            "SELECT * FROM user_style_profile WHERE user_id = %s",
+            (user_id,)
+        )
+        profile = cursor.fetchone()
+
+        if not profile:
+            cursor.execute(
+                """INSERT INTO user_style_profile
+                   (user_id, favorite_style, budget_range)
+                   VALUES (%s, 'modern', 'medium')
+                   RETURNING *""",
+                (user_id,)
+            )
+            profile = cursor.fetchone()
+            conn.commit()
+
+        # Get user preferences
+        cursor.execute(
+            "SELECT pref_key, pref_value FROM user_preferences WHERE user_id = %s",
+            (user_id,)
+        )
+        prefs = {row["pref_key"]: row["pref_value"] for row in cursor.fetchall()}
+
+        # Get order history summary
+        cursor.execute(
+            """SELECT r.name as room, COUNT(*) as orders
+               FROM orders o
+               JOIN order_items oi ON o.id = oi.order_id
+               JOIN products p ON oi.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               WHERE o.user_id = %s
+               GROUP BY r.name
+               ORDER BY orders DESC""",
+            (user_id,)
+        )
+        order_history = cursor.fetchall()
+
+        # Get average spend
+        cursor.execute(
+            """SELECT AVG(grand_total) as avg_spend,
+               MAX(grand_total) as max_spend
+               FROM orders WHERE user_id = %s""",
+            (user_id,)
+        )
+        spend_info = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "profile":       dict(profile),
+            "preferences":   prefs,
+            "order_history": list(order_history),
+            "spend_info":    dict(spend_info)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Update user style profile
+@app.route("/api/personalization/<int:user_id>", methods=["PUT"])
+def update_personalization(user_id):
+    try:
+        data           = request.get_json()
+        favorite_style = data.get("favorite_style", "modern")
+        budget_range   = data.get("budget_range", "medium")
+        color_pref     = data.get("color_pref", "")
+        material_pref  = data.get("material_pref", "")
+
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """INSERT INTO user_style_profile
+               (user_id, favorite_style, budget_range, color_pref, material_pref)
+               VALUES (%s,%s,%s,%s,%s)
+               ON CONFLICT (user_id) DO UPDATE SET
+               favorite_style = %s,
+               budget_range   = %s,
+               color_pref     = %s,
+               material_pref  = %s,
+               updated_at     = CURRENT_TIMESTAMP""",
+            (user_id, favorite_style, budget_range, color_pref, material_pref,
+             favorite_style, budget_range, color_pref, material_pref)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status":  "ok",
+            "message": "Style profile updated!"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Personalized AI chat
+@app.route("/api/chat/personalized", methods=["POST"])
+def personalized_chat():
+    try:
+        data         = request.get_json()
+        user_message = data.get("message", "")
+        user_id      = data.get("user_id", 1)
+        room         = data.get("room", "general")
+        budget       = data.get("budget", 100000)
+
+        # Detect language
+        try:
+            detected_lang = detect(user_message)
+        except:
+            detected_lang = "en"
+
+        lang_name = LANGUAGE_MAP.get(detected_lang, "English")
+
+        if detected_lang != "en":
+            english_message = translate(user_message, detected_lang, "en")
+        else:
+            english_message = user_message
+
+        # Get user context
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get user info
+        cursor.execute(
+            "SELECT name, city, language FROM users WHERE id = %s",
+            (user_id,)
+        )
+        user_info = cursor.fetchone()
+
+        # Get style profile
+        cursor.execute(
+            "SELECT * FROM user_style_profile WHERE user_id = %s",
+            (user_id,)
+        )
+        style_profile = cursor.fetchone()
+
+        # Get past orders
+        cursor.execute(
+            """SELECT p.name, p.brand, r.name as room
+               FROM order_items oi
+               JOIN products p ON oi.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               JOIN orders o ON oi.order_id = o.id
+               WHERE o.user_id = %s
+               ORDER BY o.created_at DESC
+               LIMIT 5""",
+            (user_id,)
+        )
+        past_orders = cursor.fetchall()
+
+        # Get recently viewed
+        cursor.execute(
+            """SELECT p.name, r.name as room
+               FROM user_activity ua
+               JOIN products p ON ua.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               WHERE ua.user_id = %s
+               AND ua.action = 'view_product'
+               ORDER BY ua.created_at DESC
+               LIMIT 5""",
+            (user_id,)
+        )
+        recently_viewed = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        # Build personalized context
+        user_name   = user_info["name"] if user_info else "Customer"
+        user_city   = user_info["city"] if user_info else "India"
+        style_pref  = style_profile["favorite_style"] if style_profile else "modern"
+        budget_pref = style_profile["budget_range"]   if style_profile else "medium"
+
+        past_str = ", ".join([f"{o['name']} ({o['room']})" for o in past_orders]) if past_orders else "No previous orders"
+        viewed_str = ", ".join([f"{v['name']}" for v in recently_viewed]) if recently_viewed else "Nothing viewed yet"
+
+        prompt = f"""You are HomeBot AI, a personal interior design assistant for {user_name} from {user_city}.
+
+CUSTOMER PROFILE:
+- Name: {user_name}
+- City: {user_city}
+- Style preference: {style_pref}
+- Budget range: {budget_pref}
+- Current budget: Rs.{budget:,}
+- Recently viewed: {viewed_str}
+- Past purchases: {past_str}
+
+CURRENT REQUEST:
+Room: {room}
+Message: {english_message}
+
+Give a PERSONALIZED recommendation in 2-3 sentences:
+1. Address them by name
+2. Reference their style preference ({style_pref})
+3. Suggest products within their budget Rs.{budget:,}
+4. If they have past orders, make relevant suggestions
+Keep it friendly and conversational for Indian customers."""
+
+        response         = client.models.generate_content(
+            model    = "gemini-2.0-flash",
+            contents = prompt
+        )
+        english_response = response.text
+
+        if detected_lang != "en":
+            final_response = translate(english_response, "en", detected_lang)
+        else:
+            final_response = english_response
+
+        return jsonify({
+            "reply":         final_response,
+            "detected_lang": lang_name,
+            "personalized":  True,
+            "user_name":     user_name,
+            "style_pref":    style_pref,
+            "status":        "ok"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# ── REVIEW ROUTES ──
+
+# Route: Submit product review
+@app.route("/api/reviews", methods=["POST"])
+def submit_review():
+    try:
+        data       = request.get_json()
+        product_id = data.get("product_id")
+        user_id    = data.get("user_id", 1)
+        rating     = data.get("rating", 5)
+        review_text = data.get("review_text", "")
+
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        # Check if verified buyer
+        cursor.execute(
+            """SELECT COUNT(*) FROM order_items oi
+               JOIN orders o ON oi.order_id = o.id
+               WHERE oi.product_id = %s AND o.user_id = %s""",
+            (product_id, user_id)
+        )
+        is_verified = cursor.fetchone()[0] > 0
+
+        # Check if already reviewed
+        cursor.execute(
+            """SELECT id FROM product_reviews
+               WHERE product_id = %s AND user_id = %s""",
+            (product_id, user_id)
+        )
+        existing = cursor.fetchone()
+
+        if existing:
+            # Update existing review
+            cursor.execute(
+                """UPDATE product_reviews SET
+                   rating = %s, review_text = %s,
+                   is_verified = %s
+                   WHERE product_id = %s AND user_id = %s""",
+                (rating, review_text, is_verified,
+                 product_id, user_id)
+            )
+        else:
+            # Insert new review
+            cursor.execute(
+                """INSERT INTO product_reviews
+                   (product_id, user_id, rating,
+                    review_text, is_verified)
+                   VALUES (%s,%s,%s,%s,%s)""",
+                (product_id, user_id, rating,
+                 review_text, is_verified)
+            )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status":      "ok",
+            "message":     "Review submitted!",
+            "is_verified": is_verified
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get reviews for a product
+@app.route("/api/reviews/<int:product_id>", methods=["GET"])
+def get_reviews(product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get all reviews
+        cursor.execute(
+            """SELECT pr.*, u.name as user_name
+               FROM product_reviews pr
+               JOIN users u ON pr.user_id = u.id
+               WHERE pr.product_id = %s
+               ORDER BY pr.created_at DESC""",
+            (product_id,)
+        )
+        reviews = cursor.fetchall()
+
+        # Get rating summary
+        cursor.execute(
+            """SELECT
+               COUNT(*) as total_reviews,
+               COALESCE(AVG(rating), 0) as avg_rating,
+               COUNT(CASE WHEN rating = 5 THEN 1 END) as five_star,
+               COUNT(CASE WHEN rating = 4 THEN 1 END) as four_star,
+               COUNT(CASE WHEN rating = 3 THEN 1 END) as three_star,
+               COUNT(CASE WHEN rating = 2 THEN 1 END) as two_star,
+               COUNT(CASE WHEN rating = 1 THEN 1 END) as one_star
+               FROM product_reviews
+               WHERE product_id = %s""",
+            (product_id,)
+        )
+        summary = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        result = []
+        for r in reviews:
+            d = dict(r)
+            d["created_at"] = str(r["created_at"])
+            result.append(d)
+
+        return jsonify({
+            "reviews": result,
+            "summary": dict(summary)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Mark review as helpful
+@app.route("/api/reviews/<int:review_id>/helpful", methods=["POST"])
+def mark_helpful(review_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE product_reviews
+               SET helpful_count = helpful_count + 1
+               WHERE id = %s""",
+            (review_id,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Submit chatbot rating
+@app.route("/api/chatbot/rate", methods=["POST"])
+def rate_chatbot():
+    try:
+        data       = request.get_json()
+        user_id    = data.get("user_id", 1)
+        rating     = data.get("rating", 5)
+        feedback   = data.get("feedback", "")
+        session_msg = data.get("session_msg", "")
+
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO chatbot_ratings
+               (user_id, session_msg, rating, feedback)
+               VALUES (%s,%s,%s,%s)""",
+            (user_id, session_msg, rating, feedback)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status":  "ok",
+            "message": "Thank you for your feedback!"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get chatbot rating stats
+@app.route("/api/chatbot/stats", methods=["GET"])
+def chatbot_stats():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT
+               COUNT(*) as total_ratings,
+               COALESCE(AVG(rating), 0) as avg_rating,
+               COUNT(CASE WHEN rating >= 4 THEN 1 END) as positive,
+               COUNT(CASE WHEN rating <= 2 THEN 1 END) as negative
+               FROM chatbot_ratings"""
+        )
+        stats = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return jsonify({"stats": dict(stats)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Get top rated products
+@app.route("/api/top-rated", methods=["GET"])
+def top_rated():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               COALESCE(AVG(pr.rating), 0) as avg_rating,
+               COUNT(pr.id) as review_count
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN product_reviews pr ON pr.product_id = p.id
+               GROUP BY p.id, r.name
+               HAVING COUNT(pr.id) > 0
+               ORDER BY avg_rating DESC, review_count DESC
+               LIMIT 10"""
+        )
+        products = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"products": list(products)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
