@@ -991,6 +991,128 @@ def get_bundles(room_id):
     except Exception as e:
         print(f"bundles error: {e}")
         return jsonify({"bundle_products": [], "top_rated": []}), 200
+# ── GALLERY ROUTES ──
 
+# Route: Get all images for a product
+@app.route("/api/gallery/<int:product_id>", methods=["GET"])
+def get_gallery(product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get gallery images
+        cursor.execute(
+            """SELECT * FROM product_images
+               WHERE product_id = %s
+               ORDER BY sort_order ASC""",
+            (product_id,)
+        )
+        gallery = cursor.fetchall()
+
+        # Also get main product image
+        cursor.execute(
+            "SELECT image_url FROM products WHERE id = %s",
+            (product_id,)
+        )
+        product = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        images = []
+
+        # Add main image first if exists
+        if product and product["image_url"]:
+            images.append({
+                "id":         0,
+                "product_id": product_id,
+                "image_url":  product["image_url"],
+                "image_type": "main",
+                "sort_order": -1
+            })
+
+        # Add gallery images
+        images.extend(list(gallery))
+
+        return jsonify({"images": images, "count": len(images)})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Add image to gallery
+@app.route("/api/gallery/<int:product_id>", methods=["POST"])
+def add_gallery_image(product_id):
+    try:
+        import cloudinary
+        import cloudinary.uploader
+
+        cloudinary.config(
+            cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
+            api_key    = os.getenv("CLOUDINARY_API_KEY"),
+            api_secret = os.getenv("CLOUDINARY_API_SECRET")
+        )
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+
+        file       = request.files["file"]
+        sort_order = request.form.get("sort_order", 0)
+        image_type = request.form.get("image_type", "gallery")
+
+        # Upload to Cloudinary
+        result = cloudinary.uploader.upload(
+            file,
+            folder        = "homebot-gallery",
+            public_id     = f"gallery_{product_id}_{sort_order}_{os.urandom(4).hex()}",
+            overwrite     = False,
+            resource_type = "image"
+        )
+        image_url = result["secure_url"]
+
+        # Save to database
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO product_images
+               (product_id, image_url, image_type, sort_order)
+               VALUES (%s, %s, %s, %s)
+               RETURNING id""",
+            (product_id, image_url, image_type, int(sort_order))
+        )
+        image_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "status":    "ok",
+            "image_id":  image_id,
+            "image_url": image_url,
+            "message":   "Gallery image added!"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Route: Delete gallery image
+@app.route("/api/gallery/image/<int:image_id>", methods=["DELETE"])
+def delete_gallery_image(image_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM product_images WHERE id = %s",
+            (image_id,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "ok", "message": "Image deleted!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)     
