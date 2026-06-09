@@ -52,9 +52,7 @@ const StarRating = ({ rating, onRate, size = 20 }) => (
       <span key={star}
         onClick={() => onRate && onRate(star)}
         style={{ fontSize: size, cursor: onRate ? "pointer" : "default",
-          color: star <= rating ? "#FFB800" : "#ddd" }}>
-        ★
-      </span>
+          color: star <= rating ? "#FFB800" : "#ddd" }}>★</span>
     ))}
   </div>
 );
@@ -126,22 +124,29 @@ export default function App() {
   const [showReviewForm, setShowReviewForm]   = useState(false);
   const [reviewRating, setReviewRating]       = useState(5);
   const [reviewText, setReviewText]           = useState("");
+  const [reviewPhoto, setReviewPhoto]         = useState(null);
+  const [isAnonymous, setIsAnonymous]         = useState(false);
+  const [displayName, setDisplayName]         = useState("");
   const [chatbotRating, setChatbotRating]     = useState(0);
   const [showChatbotRating, setShowChatbotRating] = useState(false);
   const [chatbotFeedback, setChatbotFeedback] = useState("");
   const [lastAiMessage, setLastAiMessage]     = useState("");
+  const [bundles, setBundles]                 = useState(null);
+  const [topRated, setTopRated]               = useState([]);
 
   useEffect(() => {
     if (selectedRoom) {
       fetch(`${API}/api/products/${selectedRoom.id}`)
         .then(r => r.json())
         .then(d => setProducts(d.products || []));
+      loadBundles(selectedRoom.id);
     }
   }, [selectedRoom]);
 
   useEffect(() => {
     fetch(`${API}/api/brands`).then(r => r.json()).then(d => setBrands(d.brands || []));
     fetch(`${API}/api/styles`).then(r => r.json()).then(d => setStyles(d.styles || []));
+    loadTopRated();
   }, []);
 
   useEffect(() => {
@@ -158,6 +163,22 @@ export default function App() {
   useEffect(() => {
     if (selectedProduct) loadProductReviews(selectedProduct.id);
   }, [selectedProduct]);
+
+  const loadTopRated = async () => {
+    try {
+      const r = await fetch(`${API}/api/top-rated`);
+      const d = await r.json();
+      setTopRated(d.products || []);
+    } catch {}
+  };
+
+  const loadBundles = async (roomId) => {
+    try {
+      const r = await fetch(`${API}/api/bundles/${roomId}`);
+      const d = await r.json();
+      setBundles(d);
+    } catch {}
+  };
 
   const loadOrders = async () => {
     if (!user) return;
@@ -244,23 +265,37 @@ export default function App() {
 
   const submitReview = async () => {
     if (!selectedProduct) return;
+    let photoUrl = "";
+    if (reviewPhoto) {
+      try {
+        const formData = new FormData();
+        formData.append("file", reviewPhoto);
+        formData.append("product_id", `review_${selectedProduct.id}_${Date.now()}`);
+        const r = await fetch(`${API}/api/upload-image`, { method: "POST", body: formData });
+        const d = await r.json();
+        if (d.status === "ok") photoUrl = d.image_url;
+      } catch {}
+    }
     try {
       const r = await fetch(`${API}/api/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_id:  selectedProduct.id,
-          user_id:     user?.id || 1,
-          rating:      reviewRating,
-          review_text: reviewText
+          product_id:   selectedProduct.id,
+          user_id:      user?.id || 1,
+          rating:       reviewRating,
+          review_text:  reviewText,
+          review_photo: photoUrl,
+          is_anonymous: isAnonymous,
+          display_name: isAnonymous ? "Anonymous" : (displayName || user?.name || "User")
         })
       });
       const d = await r.json();
       if (d.status === "ok") {
-        alert(d.is_verified ? "✅ Verified review submitted!" : "✅ Review submitted!");
+        alert(d.is_verified ? "✅ Verified Purchase review submitted!" : "✅ Review submitted!");
         setShowReviewForm(false);
-        setReviewText("");
-        setReviewRating(5);
+        setReviewText(""); setReviewRating(5);
+        setReviewPhoto(null); setIsAnonymous(false); setDisplayName("");
         loadProductReviews(selectedProduct.id);
       }
     } catch (err) { alert("Failed: " + err.message); }
@@ -271,19 +306,12 @@ export default function App() {
       const r = await fetch(`${API}/api/chatbot/rate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id:     user?.id || 1,
-          rating:      chatbotRating,
-          feedback:    chatbotFeedback,
-          session_msg: lastAiMessage
-        })
+        body: JSON.stringify({ user_id: user?.id || 1, rating: chatbotRating, feedback: chatbotFeedback, session_msg: lastAiMessage })
       });
       const d = await r.json();
       if (d.status === "ok") {
         alert("✅ Thank you for your feedback!");
-        setShowChatbotRating(false);
-        setChatbotFeedback("");
-        setChatbotRating(0);
+        setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0);
       }
     } catch (err) { alert("Failed: " + err.message); }
   };
@@ -324,8 +352,7 @@ export default function App() {
       const d = await r.json();
       if (d.status === "ok") {
         alert("✅ Profile updated!");
-        setEditProfile(false);
-        loadProfile();
+        setEditProfile(false); loadProfile();
         setUser({ ...user, name: editName });
       }
     } catch (err) { alert("Update failed: " + err.message); }
@@ -408,7 +435,7 @@ export default function App() {
       const aiReply = d.reply || "Sorry, could not process that.";
       setLastAiMessage(aiReply);
       setMessages(m => [...m, { role: "ai", text: aiReply, lang: d.detected_lang, personalized: d.personalized }]);
-      setTimeout(() => setShowChatbotRating(true), 2000);
+      setTimeout(() => setShowChatbotRating(true), 3000);
     } catch {
       setMessages(m => [...m, { role: "ai", text: "Connection error." }]);
     }
@@ -486,7 +513,7 @@ export default function App() {
   const selectStyle = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, marginBottom: 12, outline: "none", background: "white", boxSizing: "border-box" };
 
   const ProductCard = ({ p }) => (
-    <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12 }}
+    <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}
       onClick={() => { track("view_product", p.room_id, p.id, p.name); setSelectedProduct(p); setScreen("product_detail"); }}>
       <div style={{ flexShrink: 0 }}>
         {p.image_url ? (
@@ -504,9 +531,9 @@ export default function App() {
           ₹{Number(p.price).toLocaleString("en-IN")}
           <span style={{ fontSize: 11, color: "#888", fontWeight: 400 }}> / {p.unit}</span>
         </div>
-        {(p.avg_rating > 0) && (
+        {Number(p.avg_rating) > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
-            <StarRating rating={Math.round(p.avg_rating)} size={14} />
+            <StarRating rating={Math.round(Number(p.avg_rating))} size={14} />
             <span style={{ fontSize: 11, color: "#888" }}>({p.review_count || 0})</span>
           </div>
         )}
@@ -639,25 +666,28 @@ export default function App() {
 
   // ── PRODUCT DETAIL PAGE ──
   if (screen === "product_detail" && selectedProduct) {
-    const avgRating = productReviews?.summary?.avg_rating || 0;
+    const avgRating    = productReviews?.summary?.avg_rating || 0;
     const totalReviews = productReviews?.summary?.total_reviews || 0;
     return (
       <div style={{ fontFamily: "sans-serif", maxWidth: 480, margin: "0 auto", background: "#f8f9fa", minHeight: "100vh" }}>
-        <div style={{ background: "#BA7517", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setScreen("products")}
-            style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>←</button>
-          <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>Product Details</div>
+        <div style={{ background: "#BA7517", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button onClick={() => setScreen("products")} style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>←</button>
+            <div style={{ color: "white", fontWeight: 600, fontSize: 16 }}>Product Details</div>
+          </div>
+          <div style={{ background: "white", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "#BA7517", fontWeight: 500, cursor: "pointer" }}
+            onClick={() => setScreen("cart")}>🛒 {cart.length}</div>
         </div>
-        <div style={{ padding: 16 }}>
+        <div style={{ padding: 16, paddingBottom: 80 }}>
 
           {/* Product Image */}
-          <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12, textAlign: "center" }}>
+          <div style={{ background: "white", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
             {selectedProduct.image_url ? (
               <img src={selectedProduct.image_url} alt={selectedProduct.name}
-                style={{ width: "100%", maxHeight: 250, objectFit: "cover", borderRadius: 8 }}
-                onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/400x250/FFF3DC/BA7517?text=🏠"; }} />
+                style={{ width: "100%", height: 280, objectFit: "cover" }}
+                onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/480x280/FFF3DC/BA7517?text=🏠"; }} />
             ) : (
-              <div style={{ width: "100%", height: 200, background: "#FFF3DC", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🏠</div>
+              <div style={{ width: "100%", height: 280, background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 80 }}>🏠</div>
             )}
           </div>
 
@@ -665,12 +695,10 @@ export default function App() {
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{selectedProduct.name}</div>
             <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{selectedProduct.description}</div>
-            <div style={{ color: "#BA7517", fontWeight: 700, fontSize: 22, marginTop: 8 }}>
+            <div style={{ color: "#BA7517", fontWeight: 700, fontSize: 24, marginTop: 8 }}>
               ₹{Number(selectedProduct.price).toLocaleString("en-IN")}
               <span style={{ fontSize: 13, color: "#888", fontWeight: 400 }}> / {selectedProduct.unit}</span>
             </div>
-
-            {/* Rating summary */}
             {totalReviews > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <StarRating rating={Math.round(avgRating)} size={18} />
@@ -678,29 +706,78 @@ export default function App() {
                 <span style={{ fontSize: 13, color: "#888" }}>({totalReviews} reviews)</span>
               </div>
             )}
-
-            {/* Specs */}
             <div style={{ marginTop: 12 }}>
               {[
                 { label: "Brand",    value: selectedProduct.brand },
                 { label: "Material", value: selectedProduct.material },
                 { label: "Color",    value: selectedProduct.color },
-                { label: "Stock",    value: `${selectedProduct.stock_qty} units` },
-                selectedProduct.length_cm && { label: "Dimensions", value: `L:${selectedProduct.length_cm} × W:${selectedProduct.width_cm} × H:${selectedProduct.height_cm} cm` },
-              ].filter(Boolean).map((spec, i) => spec.value && (
+                { label: "Stock",    value: selectedProduct.stock_qty ? `${selectedProduct.stock_qty} units` : null },
+                selectedProduct.length_cm && { label: "Size", value: `${selectedProduct.length_cm} × ${selectedProduct.width_cm} × ${selectedProduct.height_cm} cm` },
+              ].filter(s => s && s.value).map((spec, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
                   <span style={{ color: "#888" }}>{spec.label}</span>
                   <span style={{ fontWeight: 500 }}>{spec.value}</span>
                 </div>
               ))}
             </div>
-
-            {/* Buttons */}
             <button onClick={() => addToCart(selectedProduct)}
               style={{ width: "100%", marginTop: 16, background: "#BA7517", color: "white", border: "none", borderRadius: 10, padding: 14, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
               + Add to Cart
             </button>
           </div>
+
+          {/* Bundle / Complete the Look */}
+          {bundles?.bundle_products?.length > 0 && (
+            <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>🛍️ Complete the Look</div>
+              <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
+                {bundles.bundle_products.filter(p => p.id !== selectedProduct.id).slice(0,5).map(p => (
+                  <div key={p.id} style={{ flexShrink: 0, width: 120, background: "#f8f9fa", borderRadius: 10, padding: 10, cursor: "pointer" }}
+                    onClick={() => { setSelectedProduct(p); }}>
+                    {p.image_url ? (
+                      <img src={p.image_url} alt={p.name}
+                        style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 6 }}
+                        onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/120x80/FFF3DC/BA7517?text=🏠"; }} />
+                    ) : (
+                      <div style={{ width: "100%", height: 80, background: "#FFF3DC", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🏠</div>
+                    )}
+                    <div style={{ fontSize: 11, fontWeight: 500, marginTop: 6, lineHeight: 1.3 }}>{p.name}</div>
+                    <div style={{ color: "#BA7517", fontWeight: 600, fontSize: 12, marginTop: 2 }}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                    <button onClick={e => { e.stopPropagation(); addToCart(p); }}
+                      style={{ width: "100%", marginTop: 4, background: "#BA7517", color: "white", border: "none", borderRadius: 6, padding: "3px 0", cursor: "pointer", fontSize: 10 }}>
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top Rated Section */}
+          {bundles?.top_rated?.length > 0 && (
+            <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>⭐ Top Rated in This Room</div>
+              {bundles.top_rated.slice(0,3).map(p => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "0.5px solid #f0f0f0", cursor: "pointer" }}
+                  onClick={() => setSelectedProduct(p)}>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name}
+                      style={{ width: 50, height: 50, borderRadius: 6, objectFit: "cover" }}
+                      onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/50x50/FFF3DC/BA7517?text=🏠"; }} />
+                  ) : (
+                    <div style={{ width: 50, height: 50, borderRadius: 6, background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏠</div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                    <StarRating rating={Math.round(Number(p.avg_rating))} size={12} />
+                    <div style={{ fontSize: 12, color: "#BA7517", fontWeight: 600 }}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); addToCart(p); }}
+                    style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11 }}>+ Add</button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Reviews Section */}
           <div style={{ background: "white", borderRadius: 12, padding: 16, marginBottom: 12 }}>
@@ -712,8 +789,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* Rating breakdown */}
-            {productReviews?.summary && totalReviews > 0 && (
+            {totalReviews > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                   <div style={{ fontSize: 40, fontWeight: 700, color: "#BA7517" }}>{Number(avgRating).toFixed(1)}</div>
@@ -722,36 +798,37 @@ export default function App() {
                     <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{totalReviews} reviews</div>
                   </div>
                 </div>
-                {[5,4,3,2,1].map(star => (
-                  <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, width: 30 }}>{star}★</span>
-                    <div style={{ flex: 1, height: 6, background: "#f0f0f0", borderRadius: 3 }}>
-                      <div style={{
-                        height: "100%", borderRadius: 3, background: "#FFB800",
-                        width: `${totalReviews > 0 ? (productReviews.summary[`${["one","two","three","four","five"][star-1]}_star`] / totalReviews) * 100 : 0}%`
-                      }} />
+                {[5,4,3,2,1].map(star => {
+                  const key = ["one","two","three","four","five"][star-1] + "_star";
+                  const count = productReviews?.summary?.[key] || 0;
+                  return (
+                    <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, width: 30 }}>{star}★</span>
+                      <div style={{ flex: 1, height: 6, background: "#f0f0f0", borderRadius: 3 }}>
+                        <div style={{ height: "100%", borderRadius: 3, background: "#FFB800", width: `${totalReviews > 0 ? (count / totalReviews) * 100 : 0}%` }} />
+                      </div>
+                      <span style={{ fontSize: 12, color: "#888", width: 20 }}>{count}</span>
                     </div>
-                    <span style={{ fontSize: 12, color: "#888", width: 20 }}>
-                      {productReviews.summary[`${["one","two","three","four","five"][star-1]}_star`]}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
-            {/* Review list */}
             {productReviews?.reviews?.length === 0 && (
-              <div style={{ textAlign: "center", padding: 20, color: "#888", fontSize: 13 }}>
-                No reviews yet — be the first to review!
-              </div>
+              <div style={{ textAlign: "center", padding: 20, color: "#888", fontSize: 13 }}>No reviews yet — be the first!</div>
             )}
+
             {productReviews?.reviews?.map((review, i) => (
               <div key={i} style={{ padding: "12px 0", borderBottom: "0.5px solid #f0f0f0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>👤</div>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+                      {review.is_anonymous ? "🔒" : "👤"}
+                    </div>
                     <div>
-                      <div style={{ fontWeight: 500, fontSize: 13 }}>{review.user_name}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13 }}>
+                        {review.is_anonymous ? "Anonymous" : (review.display_name || review.user_name)}
+                      </div>
                       {review.is_verified && (
                         <div style={{ fontSize: 10, color: "#085041", background: "#E1F5EE", borderRadius: 4, padding: "1px 6px", display: "inline-block" }}>
                           ✓ Verified Purchase
@@ -762,9 +839,12 @@ export default function App() {
                   <StarRating rating={review.rating} size={14} />
                 </div>
                 <div style={{ fontSize: 13, color: "#555", marginTop: 8, lineHeight: 1.5 }}>{review.review_text}</div>
-                <div style={{ fontSize: 11, color: "#888", marginTop: 6 }}>
-                  {new Date(review.created_at).toLocaleDateString("en-IN")}
-                </div>
+                {review.review_photo && (
+                  <img src={review.review_photo} alt="review"
+                    style={{ width: 80, height: 80, borderRadius: 6, objectFit: "cover", marginTop: 8 }}
+                    onError={e => e.target.style.display = "none"} />
+                )}
+                <div style={{ fontSize: 11, color: "#888", marginTop: 6 }}>{new Date(review.created_at).toLocaleDateString("en-IN")}</div>
               </div>
             ))}
           </div>
@@ -773,22 +853,49 @@ export default function App() {
         {/* Review Form Modal */}
         {showReviewForm && (
           <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ background: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 400 }}>
+            <div style={{ background: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 420, maxHeight: "90vh", overflowY: "auto" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                 <div style={{ fontWeight: 600, fontSize: 16 }}>⭐ Write a Review</div>
                 <button onClick={() => setShowReviewForm(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>✕</button>
               </div>
-              <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>Your Rating</div>
-              <StarRating rating={reviewRating} onRate={setReviewRating} size={32} />
-              <div style={{ fontSize: 13, color: "#888", marginTop: 16, marginBottom: 8 }}>Your Review</div>
-              <textarea
-                value={reviewText}
-                onChange={e => setReviewText(e.target.value)}
-                placeholder="Share your experience with this product..."
-                style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, minHeight: 100, outline: "none", resize: "none", boxSizing: "border-box" }}
-              />
+
+              {/* Star Rating */}
+              <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>Your Rating *</div>
+              <StarRating rating={reviewRating} onRate={setReviewRating} size={36} />
+
+              {/* Display Name */}
+              <div style={{ fontSize: 13, color: "#888", marginTop: 16, marginBottom: 4 }}>Display Name</div>
+              <input value={displayName} onChange={e => setDisplayName(e.target.value)}
+                placeholder={user?.name || "Your name"}
+                style={inputStyle} />
+
+              {/* Anonymous option */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#BA7517" }} />
+                <span style={{ fontSize: 13 }}>🔒 Post anonymously</span>
+              </div>
+
+              {/* Review Text */}
+              <div style={{ fontSize: 13, color: "#888", marginBottom: 4 }}>Your Review</div>
+              <textarea value={reviewText} onChange={e => setReviewText(e.target.value)}
+                placeholder="Share your experience — quality, installation, value for money..."
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, minHeight: 100, outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 12 }} />
+
+              {/* Photo Upload */}
+              <div style={{ fontSize: 13, color: "#888", marginBottom: 4 }}>📷 Add Photo (optional)</div>
+              <input type="file" accept="image/*" onChange={e => setReviewPhoto(e.target.files[0])}
+                style={{ width: "100%", marginBottom: 12, fontSize: 13 }} />
+              {reviewPhoto && (
+                <div style={{ marginBottom: 12, textAlign: "center" }}>
+                  <img src={URL.createObjectURL(reviewPhoto)} alt="preview"
+                    style={{ width: 100, height: 100, objectFit: "cover", borderRadius: 8 }} />
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>Photo preview</div>
+                </div>
+              )}
+
               <button onClick={submitReview}
-                style={{ width: "100%", marginTop: 16, padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                style={{ width: "100%", padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
                 Submit Review ⭐
               </button>
             </div>
@@ -842,20 +949,17 @@ export default function App() {
               <button onClick={() => { setUploadScreen(false); setUploadSuccess(""); setUploadFile(null); setUploadProductId(""); }}
                 style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#888" }}>✕</button>
             </div>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Select Product</div>
             <select value={uploadProductId} onChange={e => setUploadProductId(e.target.value)}
               style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 16, outline: "none", background: "white" }}>
               <option value="">-- Select a product --</option>
               {allProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.room_name})</option>)}
             </select>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Select Image</div>
             <input type="file" accept="image/*" onChange={e => setUploadFile(e.target.files[0])}
               style={{ width: "100%", marginBottom: 16, fontSize: 13 }} />
             {uploadFile && (
               <div style={{ marginBottom: 16, textAlign: "center" }}>
                 <img src={URL.createObjectURL(uploadFile)} alt="preview"
-                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8, border: "1px solid #eee" }} />
-                <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{uploadFile.name}</div>
+                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8 }} />
               </div>
             )}
             {uploadSuccess && (
@@ -908,7 +1012,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Chatbot Rating Modal */}
+      {/* Chatbot Rating */}
       {showChatbotRating && (
         <div style={{ position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 400, background: "white", borderRadius: 16, padding: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", zIndex: 150 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -941,13 +1045,38 @@ export default function App() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {ROOMS.map(room => (
                 <div key={room.id}
-                  onClick={() => { setRoom(room); setScreen("products"); track("view_room", room.id, null, room.name); trackPage("products"); }}
+                  onClick={() => { setRoom(room); setScreen("products"); track("view_room", room.id, null, room.name); }}
                   style={{ background: selectedRoom?.id === room.id ? "#FFF3DC" : "white", border: selectedRoom?.id === room.id ? "2px solid #BA7517" : "1px solid #eee", borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}>
                   <div style={{ fontSize: 32 }}>{room.icon}</div>
                   <div style={{ fontSize: 14, fontWeight: 500, marginTop: 6 }}>{room.name}</div>
                 </div>
               ))}
             </div>
+
+            {/* Top Rated Section on Home */}
+            {topRated.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: "#BA7517" }}>⭐ Top Rated Products</div>
+                <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
+                  {topRated.slice(0,6).map(p => (
+                    <div key={p.id} style={{ flexShrink: 0, width: 140, background: "white", borderRadius: 10, padding: 12, cursor: "pointer" }}
+                      onClick={() => { setSelectedProduct(p); setScreen("product_detail"); }}>
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name}
+                          style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 6 }}
+                          onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/140x90/FFF3DC/BA7517?text=🏠"; }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 90, background: "#FFF3DC", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🏠</div>
+                      )}
+                      <div style={{ fontSize: 12, fontWeight: 500, marginTop: 6 }}>{p.name}</div>
+                      <StarRating rating={Math.round(Number(p.avg_rating))} size={12} />
+                      <div style={{ color: "#BA7517", fontWeight: 600, fontSize: 12 }}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ background: "white", borderRadius: 12, padding: 16, marginTop: 16 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>💰 Your Budget</div>
               <input type="range" min={10000} max={500000} step={5000}
@@ -979,8 +1108,7 @@ export default function App() {
               <div style={{ fontSize: 16, fontWeight: 600 }}>
                 {selectedRoom ? `${selectedRoom.icon} ${selectedRoom.name}` : "Select a room first"}
               </div>
-              <button onClick={() => setScreen("home")}
-                style={{ fontSize: 12, color: "#BA7517", background: "none", border: "none", cursor: "pointer" }}>← Back</button>
+              <button onClick={() => setScreen("home")} style={{ fontSize: 12, color: "#BA7517", background: "none", border: "none", cursor: "pointer" }}>← Back</button>
             </div>
             {products.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
             {products.map(p => <ProductCard key={p.id} p={p} />)}
@@ -1116,7 +1244,8 @@ export default function App() {
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: "#BA7517" }}>🔥 Trending This Week</div>
                 <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
                   {trending.map(p => (
-                    <div key={p.id} style={{ flexShrink: 0, width: 150, background: "white", borderRadius: 10, padding: 12 }}>
+                    <div key={p.id} style={{ flexShrink: 0, width: 150, background: "white", borderRadius: 10, padding: 12, cursor: "pointer" }}
+                      onClick={() => { setSelectedProduct(p); setScreen("product_detail"); }}>
                       {p.image_url ? (
                         <img src={p.image_url} alt={p.name}
                           style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6 }}
@@ -1127,10 +1256,8 @@ export default function App() {
                       <div style={{ fontWeight: 500, fontSize: 12, marginTop: 6 }}>{p.name}</div>
                       <div style={{ color: "#BA7517", fontWeight: 600, fontSize: 13, marginTop: 2 }}>₹{Number(p.price).toLocaleString("en-IN")}</div>
                       <div style={{ fontSize: 10, color: "#888" }}>{p.room_name}</div>
-                      <button onClick={() => addToCart(p)}
-                        style={{ width: "100%", marginTop: 6, background: "#BA7517", color: "white", border: "none", borderRadius: 6, padding: "4px 0", cursor: "pointer", fontSize: 11 }}>
-                        + Add
-                      </button>
+                      <button onClick={e => { e.stopPropagation(); addToCart(p); }}
+                        style={{ width: "100%", marginTop: 6, background: "#BA7517", color: "white", border: "none", borderRadius: 6, padding: "4px 0", cursor: "pointer", fontSize: 11 }}>+ Add</button>
                     </div>
                   ))}
                 </div>
@@ -1146,11 +1273,8 @@ export default function App() {
               <div style={{ textAlign: "center", padding: 40, color: "#888" }}>
                 <div style={{ fontSize: 40 }}>✨</div>
                 <div style={{ marginTop: 8, fontWeight: 500 }}>No recommendations yet!</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>Browse some rooms first</div>
                 <button onClick={() => setScreen("home")}
-                  style={{ marginTop: 16, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 24px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                  Browse Rooms →
-                </button>
+                  style={{ marginTop: 16, background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 24px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Browse Rooms →</button>
               </div>
             )}
           </div>
