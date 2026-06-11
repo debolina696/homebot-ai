@@ -1114,5 +1114,162 @@ def delete_gallery_image(image_id):
         return jsonify({"status": "ok", "message": "Image deleted!"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    # ── FESTIVAL SALE ROUTES ──
+
+@app.route("/api/sales", methods=["GET"])
+def get_sales():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT * FROM festival_sales
+               WHERE is_active = TRUE
+               AND end_date > NOW()
+               ORDER BY created_at DESC"""
+        )
+        sales = cursor.fetchall()
+        result = []
+        for s in sales:
+            d = dict(s)
+            d["start_date"] = str(s["start_date"])
+            d["end_date"]   = str(s["end_date"])
+            d["created_at"] = str(s["created_at"])
+            result.append(d)
+        cursor.close()
+        conn.close()
+        return jsonify({"sales": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sales/<int:sale_id>/products", methods=["GET"])
+def get_sale_products(sale_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get sale info
+        cursor.execute(
+            "SELECT * FROM festival_sales WHERE id = %s",
+            (sale_id,)
+        )
+        sale = cursor.fetchone()
+        if not sale:
+            return jsonify({"error": "Sale not found"}), 404
+
+        # Check if specific products are in this sale
+        cursor.execute(
+            """SELECT sp.*, p.*, r.name as room_name,
+               sp.discount_pct as sale_discount
+               FROM sale_products sp
+               JOIN products p ON sp.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               WHERE sp.sale_id = %s""",
+            (sale_id,)
+        )
+        specific = cursor.fetchall()
+
+        # If no specific products — show all products with sale discount
+        if not specific:
+            cursor.execute(
+                """SELECT p.*, r.name as room_name,
+                   %s as sale_discount
+                   FROM products p
+                   JOIN rooms r ON p.room_id = r.id
+                   ORDER BY RANDOM() LIMIT 20""",
+                (sale["discount_pct"],)
+            )
+            products = cursor.fetchall()
+        else:
+            products = specific
+
+        result = []
+        for p in products:
+            d = dict(p)
+            original_price = float(d["price"])
+            discount       = int(d.get("sale_discount", sale["discount_pct"]))
+            sale_price     = round(original_price * (1 - discount/100), 2)
+            d["original_price"] = original_price
+            d["sale_price"]     = sale_price
+            d["discount_pct"]   = discount
+            d["savings"]        = round(original_price - sale_price, 2)
+            result.append(d)
+
+        sd = dict(sale)
+        sd["start_date"] = str(sale["start_date"])
+        sd["end_date"]   = str(sale["end_date"])
+
+        cursor.close()
+        conn.close()
+        return jsonify({"sale": sd, "products": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sales", methods=["POST"])
+def create_sale():
+    try:
+        data   = request.get_json()
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO festival_sales
+               (name,description,discount_pct,start_date,end_date,banner_color,emoji)
+               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (data.get("name"), data.get("description"), data.get("discount_pct",10),
+             data.get("start_date"), data.get("end_date"),
+             data.get("banner_color","#BA7517"), data.get("emoji","sale"))
+        )
+        sale_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status":"ok","sale_id":sale_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sales/<int:sale_id>", methods=["PUT"])
+def update_sale(sale_id):
+    try:
+        data   = request.get_json()
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE festival_sales SET
+               name=%s, description=%s, discount_pct=%s,
+               end_date=%s, is_active=%s
+               WHERE id=%s""",
+            (data.get("name"), data.get("description"),
+             data.get("discount_pct",10), data.get("end_date"),
+             data.get("is_active",True), sale_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status":"ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sales/<int:sale_id>", methods=["DELETE"])
+def delete_sale(sale_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE festival_sales SET is_active=FALSE WHERE id=%s",
+            (sale_id,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status":"ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)     

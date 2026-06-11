@@ -1,54 +1,74 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const API = "http://127.0.0.1:5000";
 
-const track = async (action, roomId = null, productId = null, details = "") => {
-  try {
-    await fetch(`${API}/api/analytics/track`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: 1, action, room_id: roomId, product_id: productId, details })
-    });
-  } catch {}
+const track = async (action, roomId=null, productId=null, details="") => {
+  try { await fetch(`${API}/api/analytics/track`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:1,action,room_id:roomId,product_id:productId,details})}); } catch {}
 };
-
-const trackPage = async (page, duration = 0) => {
-  try {
-    await fetch(`${API}/api/analytics/pageview`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: 1, page, duration })
-    });
-  } catch {}
+const trackPage = async (page, duration=0) => {
+  try { await fetch(`${API}/api/analytics/pageview`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:1,page,duration})}); } catch {}
 };
 
 const ROOMS = [
-  { id: 1, name: "Bathroom",    icon: "🛁" },
-  { id: 2, name: "Bedroom",     icon: "🛏️" },
-  { id: 3, name: "Kitchen",     icon: "🍳" },
-  { id: 4, name: "Living Room", icon: "🛋️" },
-  { id: 5, name: "Dining Room", icon: "🍽️" },
-  { id: 6, name: "Study Room",  icon: "📚" },
-  { id: 7, name: "Puja Room",   icon: "🙏" },
-  { id: 8, name: "Exterior",    icon: "🏗️" },
+  {id:1,name:"Bathroom",    icon:"🛁"},
+  {id:2,name:"Bedroom",     icon:"🛏️"},
+  {id:3,name:"Kitchen",     icon:"🍳"},
+  {id:4,name:"Living Room", icon:"🛋️"},
+  {id:5,name:"Dining Room", icon:"🍽️"},
+  {id:6,name:"Study Room",  icon:"📚"},
+  {id:7,name:"Puja Room",   icon:"🙏"},
+  {id:8,name:"Exterior",    icon:"🏗️"},
 ];
 
 const STATUS_COLORS = {
-  pending:    { bg: "#FFF3DC", color: "#BA7517" },
-  processing: { bg: "#E6F1FB", color: "#0C447C" },
-  shipped:    { bg: "#EEEDFE", color: "#26215C" },
-  delivered:  { bg: "#E1F5EE", color: "#085041" },
-  cancelled:  { bg: "#FCEBEB", color: "#501313" },
+  pending:    {bg:"#FFF3DC",color:"#BA7517"},
+  processing: {bg:"#E6F1FB",color:"#0C447C"},
+  shipped:    {bg:"#EEEDFE",color:"#26215C"},
+  delivered:  {bg:"#E1F5EE",color:"#085041"},
+  cancelled:  {bg:"#FCEBEB",color:"#501313"},
 };
 
 const LANGUAGES = ["english","hindi","bengali","tamil","telugu","marathi","gujarati","kannada","malayalam","punjabi","odia"];
 
-const StarRating = ({ rating, onRate, size = 20 }) => (
-  <div style={{ display: "flex", gap: 2 }}>
-    {[1,2,3,4,5].map(star => (
-      <span key={star} onClick={() => onRate && onRate(star)}
-        style={{ fontSize: size, cursor: onRate ? "pointer" : "default", color: star <= rating ? "#FFB800" : "#ddd" }}>★</span>
+const StarRating = ({rating, onRate, size=20}) => (
+  <div style={{display:"flex",gap:2}}>
+    {[1,2,3,4,5].map(star=>(
+      <span key={star} onClick={()=>onRate&&onRate(star)}
+        style={{fontSize:size,cursor:onRate?"pointer":"default",color:star<=rating?"#FFB800":"#ddd"}}>★</span>
     ))}
   </div>
 );
+
+// Countdown Timer Component
+const CountdownTimer = ({endDate}) => {
+  const [timeLeft, setTimeLeft] = useState({});
+  useEffect(() => {
+    const calc = () => {
+      const diff = new Date(endDate) - new Date();
+      if (diff <= 0) { setTimeLeft({expired:true}); return; }
+      setTimeLeft({
+        days:    Math.floor(diff / (1000*60*60*24)),
+        hours:   Math.floor((diff%(1000*60*60*24))/(1000*60*60)),
+        minutes: Math.floor((diff%(1000*60*60))/(1000*60)),
+        seconds: Math.floor((diff%(1000*60))/1000),
+      });
+    };
+    calc();
+    const timer = setInterval(calc, 1000);
+    return () => clearInterval(timer);
+  }, [endDate]);
+  if (timeLeft.expired) return <span style={{color:"#c00",fontSize:11}}>Sale Ended</span>;
+  return (
+    <div style={{display:"flex",gap:4,alignItems:"center"}}>
+      {[["days",timeLeft.days],["hrs",timeLeft.hours],["min",timeLeft.minutes],["sec",timeLeft.seconds]].map(([label,val])=>(
+        <div key={label} style={{background:"rgba(0,0,0,0.2)",borderRadius:4,padding:"2px 5px",textAlign:"center",minWidth:32}}>
+          <div style={{fontSize:13,fontWeight:700,color:"white"}}>{String(val||0).padStart(2,"0")}</div>
+          <div style={{fontSize:8,color:"rgba(255,255,255,0.8)"}}>{label}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export default function App() {
   const [screen, setScreen]               = useState("login");
@@ -56,7 +76,7 @@ export default function App() {
   const [selectedRoom, setRoom]           = useState(null);
   const [products, setProducts]           = useState([]);
   const [cart, setCart]                   = useState([]);
-  const [messages, setMessages]           = useState([{ role: "ai", text: "👋 Namaste! I am HomeBot AI. Which room do you want to renovate today?" }]);
+  const [messages, setMessages]           = useState([{role:"ai",text:"👋 Namaste! I am HomeBot AI. Which room do you want to renovate today?"}]);
   const [input, setInput]                 = useState("");
   const [loading, setLoading]             = useState(false);
   const [budget, setBudget]               = useState(100000);
@@ -129,24 +149,31 @@ export default function App() {
   const [showGalleryUpload, setShowGalleryUpload] = useState(false);
   const [galleryFile, setGalleryFile]         = useState(null);
   const [galleryUploading, setGalleryUploading] = useState(false);
+  // Day 23 — Festival Sales
+  const [sales, setSales]                     = useState([]);
+  const [selectedSale, setSelectedSale]       = useState(null);
+  const [saleProducts, setSaleProducts]       = useState([]);
+  const [saleLoading, setSaleLoading]         = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
-      fetch(`${API}/api/products/${selectedRoom.id}`).then(r => r.json()).then(d => setProducts(d.products || []));
+      fetch(`${API}/api/products/${selectedRoom.id}`).then(r=>r.json()).then(d=>setProducts(d.products||[]));
       loadBundles(selectedRoom.id);
     }
   }, [selectedRoom]);
 
   useEffect(() => {
-    fetch(`${API}/api/brands`).then(r => r.json()).then(d => setBrands(d.brands || []));
-    fetch(`${API}/api/styles`).then(r => r.json()).then(d => setStyles(d.styles || []));
+    fetch(`${API}/api/brands`).then(r=>r.json()).then(d=>setBrands(d.brands||[]));
+    fetch(`${API}/api/styles`).then(r=>r.json()).then(d=>setStyles(d.styles||[]));
     loadTopRated();
+    loadSales();
   }, []);
 
   useEffect(() => {
-    if (user && screen === "orders")  loadOrders();
-    if (user && screen === "profile") { loadProfile(); loadStyleProfile(); }
-    if (screen === "recommendations") loadRecommendations();
+    if (user&&screen==="orders")  loadOrders();
+    if (user&&screen==="profile") { loadProfile(); loadStyleProfile(); }
+    if (screen==="recommendations") loadRecommendations();
+    if (screen==="sales") loadSales();
     trackPage(screen);
   }, [screen, user]);
 
@@ -156,21 +183,28 @@ export default function App() {
     if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); }
   }, [selectedProduct]);
 
-  const loadTopRated       = async () => { try { const r = await fetch(`${API}/api/top-rated`); const d = await r.json(); setTopRated(d.products || []); } catch {} };
-  const loadBundles        = async (id) => { try { const r = await fetch(`${API}/api/bundles/${id}`); const d = await r.json(); setBundles(d); } catch {} };
-  const loadProductReviews = async (id) => { try { const r = await fetch(`${API}/api/reviews/${id}`); const d = await r.json(); setProductReviews(d); } catch { setProductReviews(null); } };
-  const loadProductGallery = async (id) => { try { const r = await fetch(`${API}/api/gallery/${id}`); const d = await r.json(); setProductGallery(d.images || []); setGalleryIndex(0); } catch { setProductGallery([]); } };
+  const loadTopRated       = async () => { try { const r=await fetch(`${API}/api/top-rated`); const d=await r.json(); setTopRated(d.products||[]); } catch {} };
+  const loadBundles        = async (id) => { try { const r=await fetch(`${API}/api/bundles/${id}`); const d=await r.json(); setBundles(d); } catch {} };
+  const loadProductReviews = async (id) => { try { const r=await fetch(`${API}/api/reviews/${id}`); const d=await r.json(); setProductReviews(d); } catch { setProductReviews(null); } };
+  const loadProductGallery = async (id) => { try { const r=await fetch(`${API}/api/gallery/${id}`); const d=await r.json(); setProductGallery(d.images||[]); setGalleryIndex(0); } catch { setProductGallery([]); } };
+  const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
+
+  const loadSaleProducts = async (sale) => {
+    setSelectedSale(sale); setSaleLoading(true);
+    try { const r=await fetch(`${API}/api/sales/${sale.id}/products`); const d=await r.json(); setSaleProducts(d.products||[]); setScreen("sale_detail"); } catch {}
+    setSaleLoading(false);
+  };
 
   const loadOrders = async () => {
     if (!user) return; setOrdersLoading(true);
-    try { const r = await fetch(`${API}/api/orders/${user.id}`); const d = await r.json(); setOrders(d.orders || []); } catch { setOrders([]); }
+    try { const r=await fetch(`${API}/api/orders/${user.id}`); const d=await r.json(); setOrders(d.orders||[]); } catch { setOrders([]); }
     setOrdersLoading(false);
   };
 
   const loadProfile = async () => {
     if (!user) return; setProfileLoading(true);
     try {
-      const r = await fetch(`${API}/api/profile/${user.id}`); const d = await r.json(); setProfile(d);
+      const r=await fetch(`${API}/api/profile/${user.id}`); const d=await r.json(); setProfile(d);
       setEditName(d.user.name); setEditPhone(d.user.phone||""); setEditCity(d.user.city||""); setEditLang(d.user.language||"english");
     } catch { setProfile(null); }
     setProfileLoading(false);
@@ -178,25 +212,25 @@ export default function App() {
 
   const loadStyleProfile = async () => {
     try {
-      const r = await fetch(`${API}/api/personalization/${user?.id||1}`); const d = await r.json(); setStyleProfile(d);
+      const r=await fetch(`${API}/api/personalization/${user?.id||1}`); const d=await r.json(); setStyleProfile(d);
       if (d.profile) { setStylePref(d.profile.favorite_style||"modern"); setBudgetPref(d.profile.budget_range||"medium"); setColorPref(d.profile.color_pref||""); setMaterialPref(d.profile.material_pref||""); }
     } catch {}
   };
 
   const saveStyleProfile = async () => {
     try {
-      const r = await fetch(`${API}/api/personalization/${user?.id||1}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({favorite_style:stylePref,budget_range:budgetPref,color_pref:colorPref,material_pref:materialPref}) });
-      const d = await r.json();
+      const r=await fetch(`${API}/api/personalization/${user?.id||1}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({favorite_style:stylePref,budget_range:budgetPref,color_pref:colorPref,material_pref:materialPref})});
+      const d=await r.json();
       if (d.status==="ok") { alert("✅ Style profile saved!"); setShowStyleSetup(false); loadStyleProfile(); }
     } catch(err) { alert("Failed: "+err.message); }
   };
 
-  const loadAllProducts    = async () => { try { const r = await fetch(`${API}/api/search?q=`); const d = await r.json(); setAllProducts(d.products||[]); } catch { setAllProducts([]); } };
+  const loadAllProducts    = async () => { try { const r=await fetch(`${API}/api/search?q=`); const d=await r.json(); setAllProducts(d.products||[]); } catch { setAllProducts([]); } };
 
   const loadRecommendations = async () => {
     setRecLoading(true);
-    try { const r = await fetch(`${API}/api/recommendations/user/${user?.id||1}`); const d = await r.json(); setRecommendations(d.recommendations||[]); } catch { setRecommendations([]); }
-    try { const r = await fetch(`${API}/api/trending`); const d = await r.json(); setTrending(d.trending||[]); } catch { setTrending([]); }
+    try { const r=await fetch(`${API}/api/recommendations/user/${user?.id||1}`); const d=await r.json(); setRecommendations(d.recommendations||[]); } catch { setRecommendations([]); }
+    try { const r=await fetch(`${API}/api/trending`); const d=await r.json(); setTrending(d.trending||[]); } catch { setTrending([]); }
     setRecLoading(false);
   };
 
@@ -204,9 +238,9 @@ export default function App() {
     if (!galleryFile) { alert("Select an image first!"); return; }
     setGalleryUploading(true);
     try {
-      const fd = new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery");
-      const r = await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d = await r.json();
-      if (d.status==="ok") { alert("✅ Gallery image added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); }
+      const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery");
+      const r=await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d=await r.json();
+      if (d.status==="ok") { alert("✅ Added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); }
       else alert("Error: "+d.error);
     } catch(err) { alert("Failed: "+err.message); }
     setGalleryUploading(false);
@@ -214,25 +248,25 @@ export default function App() {
 
   const submitReview = async () => {
     if (!selectedProduct) return;
-    let photoUrl = "";
+    let photoUrl="";
     if (reviewPhoto) {
       try {
-        const fd = new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`);
-        const r = await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d = await r.json();
-        if (d.status==="ok") photoUrl = d.image_url;
+        const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`);
+        const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json();
+        if (d.status==="ok") photoUrl=d.image_url;
       } catch {}
     }
     try {
-      const r = await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})});
-      const d = await r.json();
-      if (d.status==="ok") { alert(d.is_verified?"✅ Verified review submitted!":"✅ Review submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); }
+      const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})});
+      const d=await r.json();
+      if (d.status==="ok") { alert(d.is_verified?"✅ Verified!":"✅ Review submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); }
     } catch(err) { alert("Failed: "+err.message); }
   };
 
   const submitChatbotRating = async () => {
     try {
-      const r = await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})});
-      const d = await r.json();
+      const r=await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})});
+      const d=await r.json();
       if (d.status==="ok") { alert("✅ Thank you!"); setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0); }
     } catch(err) { alert("Failed: "+err.message); }
   };
@@ -241,8 +275,8 @@ export default function App() {
     if (!uploadFile||!uploadProductId) { alert("Please select product and image!"); return; }
     setUploadLoading(true);
     try {
-      const fd = new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId);
-      const r = await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d = await r.json();
+      const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId);
+      const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json();
       if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Image uploaded!"); } else alert("Error: "+d.error);
     } catch(err) { alert("Upload failed: "+err.message); }
     setUploadLoading(false);
@@ -250,14 +284,14 @@ export default function App() {
 
   const trackOrderFn = async (orderId) => {
     setTrackLoading(true);
-    try { const r = await fetch(`${API}/api/track/${orderId}`); const d = await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track order"); }
+    try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track order"); }
     setTrackLoading(false);
   };
 
   const saveProfile = async () => {
     try {
-      const r = await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})});
-      const d = await r.json();
+      const r=await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})});
+      const d=await r.json();
       if (d.status==="ok") { alert("✅ Profile updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); }
     } catch(err) { alert("Update failed: "+err.message); }
   };
@@ -266,8 +300,8 @@ export default function App() {
     if (cart.length===0) { alert("Cart is empty!"); return; }
     setOrderPlacing(true);
     try {
-      const r = await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home"})});
-      const d = await r.json();
+      const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home"})});
+      const d=await r.json();
       if (d.status==="ok") { setOrderSuccess(d); setCart([]); track("place_order",null,null,`Order #${d.order_id}`); } else alert("Order failed: "+d.error);
     } catch(err) { alert("Order failed: "+err.message); }
     setOrderPlacing(false);
@@ -275,18 +309,18 @@ export default function App() {
 
   const handleSearch = async () => {
     setSearching(true);
-    let url = `${API}/api/search?q=${searchQuery}`;
+    let url=`${API}/api/search?q=${searchQuery}`;
     if (filterRoom)  url+=`&room_id=${filterRoom}`;
     if (filterMin)   url+=`&min_price=${filterMin}`;
     if (filterMax)   url+=`&max_price=${filterMax}`;
     if (filterStyle) url+=`&style=${filterStyle}`;
     if (filterBrand) url+=`&brand=${filterBrand}`;
-    try { const r = await fetch(url); const d = await r.json(); setSearchResults(d.products||[]); track("search",null,null,searchQuery); } catch { setSearchResults([]); }
+    try { const r=await fetch(url); const d=await r.json(); setSearchResults(d.products||[]); track("search",null,null,searchQuery); } catch { setSearchResults([]); }
     setSearching(false);
   };
 
-  const clearFilters = () => { setSearchQuery(""); setFilterRoom(""); setFilterMin(""); setFilterMax(""); setFilterStyle(""); setFilterBrand(""); setSearchResults([]); };
-  const addToCart    = (p) => { const e=cart.find(i=>i.id===p.id); if(e){setCart(cart.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i));}else{setCart([...cart,{...p,qty:1}]);} track("add_to_cart",p.room_id,p.id,p.name); };
+  const clearFilters   = () => { setSearchQuery(""); setFilterRoom(""); setFilterMin(""); setFilterMax(""); setFilterStyle(""); setFilterBrand(""); setSearchResults([]); };
+  const addToCart      = (p) => { const e=cart.find(i=>i.id===p.id); if(e){setCart(cart.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i));}else{setCart([...cart,{...p,qty:1}]);} track("add_to_cart",p.room_id,p.id,p.name); };
   const removeFromCart = (id) => setCart(cart.filter(i=>i.id!==id));
   const subtotal   = cart.reduce((s,i)=>s+i.price*i.qty,0);
   const gst        = Math.round(subtotal*0.18);
@@ -294,12 +328,12 @@ export default function App() {
 
   const sendMessage = async () => {
     if (!input.trim()) return;
-    const userMsg = input; setInput("");
+    const userMsg=input; setInput("");
     setMessages(m=>[...m,{role:"user",text:userMsg}]); setLoading(true); track("chat_message",null,null,userMsg);
     try {
-      const ep = usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`;
-      const r = await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})});
-      const d = await r.json(); const aiReply = d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply);
+      const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`;
+      const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})});
+      const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply);
       setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]);
       setTimeout(()=>setShowChatbotRating(true),3000);
     } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); }
@@ -309,60 +343,81 @@ export default function App() {
   const downloadPDF = async () => {
     if (cart.length===0) { alert("Add products first!"); return; } setPdfLoading(true);
     try {
-      const res = await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})});
+      const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})});
       if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; }
-      const blob = await res.blob(); const url = window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"}));
-      const a = document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf";
+      const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"}));
+      const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf";
       document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100);
     } catch(err) { alert("PDF failed: "+err.message); }
     setPdfLoading(false);
   };
 
   const sendWhatsApp = async () => {
-    const phone = prompt("Enter WhatsApp number:\nExample: +919876543210"); if (!phone) return;
+    const phone=prompt("Enter WhatsApp number:\nExample: +919876543210"); if (!phone) return;
     try {
-      const r = await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:grandTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})});
-      const d = await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error);
+      const r=await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:grandTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})});
+      const d=await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error);
     } catch(err) { alert("Failed: "+err.message); }
   };
 
   const handleLogin = async () => {
     setLoginError("");
     try {
-      const r = await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})});
-      const d = await r.json();
+      const r=await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})});
+      const d=await r.json();
       if (d.status==="ok") { setUser(d.user); setScreen("home"); track("login",null,null,d.user.name); } else setLoginError(d.message||"Login failed");
     } catch { setLoginError("Connection error."); }
   };
 
   const handleRegister = async () => {
     try {
-      const r = await fetch(`${API}/api/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:regName,email:regEmail,password:regPassword,phone:regPhone,city:regCity,language:"english"})});
-      const d = await r.json();
+      const r=await fetch(`${API}/api/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:regName,email:regEmail,password:regPassword,phone:regPhone,city:regCity,language:"english"})});
+      const d=await r.json();
       if (d.status==="ok") { alert("✅ Registered! Please login."); setShowRegister(false); } else alert("Error: "+d.error);
     } catch(err) { alert("Failed: "+err.message); }
   };
 
-  const S = { input:{width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",boxSizing:"border-box"}, select:{width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",background:"white",boxSizing:"border-box"} };
+  const S = {
+    input:  {width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",boxSizing:"border-box"},
+    select: {width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",background:"white",boxSizing:"border-box"}
+  };
 
-  const ProductCard = ({p}) => (
-    <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer"}}
-      onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");}}>
-      <div style={{flexShrink:0}}>
-        {p.image_url?<img src={p.image_url} alt={p.name} style={{width:90,height:90,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/90x90/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:90,height:90,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
+  const ProductCard = ({p, saleDiscount=0}) => {
+    const salePrice = saleDiscount>0 ? Math.round(p.price*(1-saleDiscount/100)) : null;
+    return (
+      <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer"}}
+        onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");}}>
+        <div style={{flexShrink:0,position:"relative"}}>
+          {p.image_url?<img src={p.image_url} alt={p.name} style={{width:90,height:90,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/90x90/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:90,height:90,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
+          {saleDiscount>0&&<div style={{position:"absolute",top:-4,left:-4,background:"#FF4444",color:"white",borderRadius:6,padding:"2px 5px",fontSize:10,fontWeight:700}}>{saleDiscount}% OFF</div>}
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
+          <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.description}</div>
+          <div style={{marginTop:6}}>
+            {salePrice?(
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{color:"#FF4444",fontWeight:700,fontSize:16}}>₹{salePrice.toLocaleString("en-IN")}</span>
+                <span style={{color:"#888",fontSize:12,textDecoration:"line-through"}}>₹{Number(p.price).toLocaleString("en-IN")}</span>
+                <span style={{background:"#FF4444",color:"white",borderRadius:4,padding:"1px 5px",fontSize:10}}>SALE</span>
+              </div>
+            ):(
+              <span style={{color:"#BA7517",fontWeight:700,fontSize:15}}>₹{Number(p.price).toLocaleString("en-IN")}<span style={{fontSize:11,color:"#888",fontWeight:400}}> / {p.unit}</span></span>
+            )}
+          </div>
+          {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={14}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
+          {(p.material||p.color)&&<div style={{fontSize:11,marginTop:4,display:"flex",gap:4,flexWrap:"wrap"}}>{p.material&&<span style={{background:"#EEEDFE",color:"#26215C",borderRadius:4,padding:"2px 6px"}}>🧱 {p.material}</span>}{p.color&&<span style={{background:"#E1F5EE",color:"#085041",borderRadius:4,padding:"2px 6px"}}>🎨 {p.color}</span>}</div>}
+          <div style={{fontSize:11,color:"#666",marginTop:4}}>Brand: <strong>{p.brand}</strong>{p.room_name&&<span style={{color:"#BA7517"}}> | {p.room_name}</span>}</div>
+          <button onClick={e=>{e.stopPropagation();addToCart(salePrice?{...p,price:salePrice}:p);}}
+            style={{marginTop:8,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+            + Add to Cart {salePrice&&"🔥"}
+          </button>
+        </div>
       </div>
-      <div style={{flex:1}}>
-        <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
-        <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.description}</div>
-        <div style={{color:"#BA7517",fontWeight:700,marginTop:6,fontSize:15}}>₹{Number(p.price).toLocaleString("en-IN")}<span style={{fontSize:11,color:"#888",fontWeight:400}}> / {p.unit}</span></div>
-        {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={14}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
-        {(p.material||p.color)&&<div style={{fontSize:11,marginTop:4,display:"flex",gap:4,flexWrap:"wrap"}}>{p.material&&<span style={{background:"#EEEDFE",color:"#26215C",borderRadius:4,padding:"2px 6px"}}>🧱 {p.material}</span>}{p.color&&<span style={{background:"#E1F5EE",color:"#085041",borderRadius:4,padding:"2px 6px"}}>🎨 {p.color}</span>}</div>}
-        <div style={{fontSize:11,color:"#666",marginTop:4}}>Brand: <strong>{p.brand}</strong> | Stock: {p.stock_qty}{p.room_name&&<span style={{color:"#BA7517"}}> | {p.room_name}</span>}</div>
-        <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{marginTop:8,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add to Cart</button>
-      </div>
-    </div>
-  );
+    );
+  };
 
+  // ── LOGIN ──
   if (screen==="login") return (
     <div style={{fontFamily:"sans-serif",maxWidth:400,margin:"0 auto",padding:"40px 20px",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:56}}>🏠</div><div style={{fontSize:24,fontWeight:700,color:"#BA7517"}}>HomeBot AI</div><div style={{fontSize:13,color:"#888",marginTop:4}}>Interior Design Assistant</div></div>
@@ -379,11 +434,11 @@ export default function App() {
       ):(
         <div style={{background:"white",borderRadius:16,padding:24,boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
           <div style={{fontSize:18,fontWeight:600,marginBottom:20}}>Create Account</div>
-          <input placeholder="Full name" value={regName} onChange={e=>setRegName(e.target.value)} style={S.input}/>
-          <input placeholder="Email" value={regEmail} onChange={e=>setRegEmail(e.target.value)} style={S.input}/>
+          <input placeholder="Full name"  value={regName}     onChange={e=>setRegName(e.target.value)}     style={S.input}/>
+          <input placeholder="Email"      value={regEmail}    onChange={e=>setRegEmail(e.target.value)}    style={S.input}/>
           <input type="password" placeholder="Password" value={regPassword} onChange={e=>setRegPassword(e.target.value)} style={S.input}/>
-          <input placeholder="Phone" value={regPhone} onChange={e=>setRegPhone(e.target.value)} style={S.input}/>
-          <input placeholder="City" value={regCity} onChange={e=>setRegCity(e.target.value)} style={S.input}/>
+          <input placeholder="Phone"      value={regPhone}    onChange={e=>setRegPhone(e.target.value)}    style={S.input}/>
+          <input placeholder="City"       value={regCity}     onChange={e=>setRegCity(e.target.value)}     style={S.input}/>
           <button onClick={handleRegister} style={{width:"100%",padding:12,background:"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:12}}>Register →</button>
           <div style={{textAlign:"center"}}><span onClick={()=>setShowRegister(false)} style={{fontSize:13,color:"#BA7517",cursor:"pointer"}}>← Back to Login</span></div>
         </div>
@@ -391,6 +446,7 @@ export default function App() {
     </div>
   );
 
+  // ── ORDER TRACKING ──
   if (screen==="track"&&trackedOrder) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
@@ -431,9 +487,34 @@ export default function App() {
     </div>
   );
 
+  // ── SALE DETAIL PAGE ──
+  if (screen==="sale_detail"&&selectedSale) return (
+    <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
+      <div style={{background:selectedSale.banner_color||"#BA7517",padding:"16px 20px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <button onClick={()=>setScreen("home")} style={{background:"none",border:"none",color:"white",fontSize:20,cursor:"pointer"}}>←</button>
+          <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
+        </div>
+        <div style={{color:"white",fontWeight:700,fontSize:20}}>{selectedSale.emoji} {selectedSale.name}</div>
+        <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,marginTop:4}}>{selectedSale.description}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
+          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 12px",color:"white",fontSize:13,fontWeight:600}}>Up to {selectedSale.discount_pct}% OFF</div>
+          <div style={{color:"rgba(255,255,255,0.85)",fontSize:12}}>Ends in:</div>
+          <CountdownTimer endDate={selectedSale.end_date}/>
+        </div>
+      </div>
+      <div style={{padding:16,paddingBottom:80}}>
+        {saleLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading sale products...</div>}
+        {!saleLoading&&saleProducts.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}>No products in this sale yet</div>}
+        {!saleLoading&&saleProducts.map(p=><ProductCard key={p.id} p={p} saleDiscount={p.discount_pct||selectedSale.discount_pct}/>)}
+      </div>
+    </div>
+  );
+
+  // ── PRODUCT DETAIL PAGE ──
   if (screen==="product_detail"&&selectedProduct) {
-    const avg = productReviews?.summary?.avg_rating||0;
-    const total = productReviews?.summary?.total_reviews||0;
+    const avg=productReviews?.summary?.avg_rating||0;
+    const total=productReviews?.summary?.total_reviews||0;
     return (
       <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
         <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -448,33 +529,12 @@ export default function App() {
           {/* IMAGE GALLERY */}
           <div style={{background:"white",borderRadius:12,overflow:"hidden",marginBottom:12}}>
             <div style={{position:"relative",width:"100%",height:280,background:"#f8f9fa"}}>
-              {productGallery.length>0?(
-                <img src={productGallery[galleryIndex]?.image_url} alt={selectedProduct.name} style={{width:"100%",height:280,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/480x280/FFF3DC/BA7517?text=🏠";}}/>
-              ):selectedProduct.image_url?(
-                <img src={selectedProduct.image_url} alt={selectedProduct.name} style={{width:"100%",height:280,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/480x280/FFF3DC/BA7517?text=🏠";}}/>
-              ):(
-                <div style={{width:"100%",height:280,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:80}}>🏠</div>
-              )}
-              {productGallery.length>1&&galleryIndex>0&&(
-                <button onClick={()=>setGalleryIndex(i=>i-1)} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",background:"rgba(0,0,0,0.5)",color:"white",border:"none",borderRadius:"50%",width:36,height:36,fontSize:20,cursor:"pointer"}}>‹</button>
-              )}
-              {productGallery.length>1&&galleryIndex<productGallery.length-1&&(
-                <button onClick={()=>setGalleryIndex(i=>i+1)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"rgba(0,0,0,0.5)",color:"white",border:"none",borderRadius:"50%",width:36,height:36,fontSize:20,cursor:"pointer"}}>›</button>
-              )}
+              {productGallery.length>0?(<img src={productGallery[galleryIndex]?.image_url} alt={selectedProduct.name} style={{width:"100%",height:280,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/480x280/FFF3DC/BA7517?text=🏠";}}/>):selectedProduct.image_url?(<img src={selectedProduct.image_url} alt={selectedProduct.name} style={{width:"100%",height:280,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/480x280/FFF3DC/BA7517?text=🏠";}}/>):(<div style={{width:"100%",height:280,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:80}}>🏠</div>)}
+              {productGallery.length>1&&galleryIndex>0&&(<button onClick={()=>setGalleryIndex(i=>i-1)} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",background:"rgba(0,0,0,0.5)",color:"white",border:"none",borderRadius:"50%",width:36,height:36,fontSize:20,cursor:"pointer"}}>‹</button>)}
+              {productGallery.length>1&&galleryIndex<productGallery.length-1&&(<button onClick={()=>setGalleryIndex(i=>i+1)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"rgba(0,0,0,0.5)",color:"white",border:"none",borderRadius:"50%",width:36,height:36,fontSize:20,cursor:"pointer"}}>›</button>)}
               {productGallery.length>1&&<div style={{position:"absolute",bottom:10,right:10,background:"rgba(0,0,0,0.6)",color:"white",borderRadius:12,padding:"3px 10px",fontSize:12}}>{galleryIndex+1} / {productGallery.length}</div>}
             </div>
-            {productGallery.length>1?(
-              <div style={{display:"flex",gap:8,padding:12,overflowX:"auto"}}>
-                {productGallery.map((img,i)=>(
-                  <img key={i} src={img.image_url} alt={`view ${i+1}`} onClick={()=>setGalleryIndex(i)} style={{width:60,height:60,borderRadius:6,objectFit:"cover",cursor:"pointer",flexShrink:0,border:i===galleryIndex?"2px solid #BA7517":"2px solid transparent",opacity:i===galleryIndex?1:0.7}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>
-                ))}
-                <div onClick={()=>setShowGalleryUpload(true)} style={{width:60,height:60,borderRadius:6,border:"2px dashed #BA7517",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#BA7517",fontSize:24}}>+</div>
-              </div>
-            ):(
-              <div style={{padding:"8px 12px",textAlign:"center"}}>
-                <button onClick={()=>setShowGalleryUpload(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px dashed #BA7517",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12}}>📷 Add More Photos</button>
-              </div>
-            )}
+            {productGallery.length>1?(<div style={{display:"flex",gap:8,padding:12,overflowX:"auto"}}>{productGallery.map((img,i)=>(<img key={i} src={img.image_url} alt={`view ${i+1}`} onClick={()=>setGalleryIndex(i)} style={{width:60,height:60,borderRadius:6,objectFit:"cover",cursor:"pointer",flexShrink:0,border:i===galleryIndex?"2px solid #BA7517":"2px solid transparent",opacity:i===galleryIndex?1:0.7}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>))}<div onClick={()=>setShowGalleryUpload(true)} style={{width:60,height:60,borderRadius:6,border:"2px dashed #BA7517",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#BA7517",fontSize:24}}>+</div></div>):(<div style={{padding:"8px 12px",textAlign:"center"}}><button onClick={()=>setShowGalleryUpload(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px dashed #BA7517",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12}}>📷 Add More Photos</button></div>)}
           </div>
 
           {/* PRODUCT INFO */}
@@ -558,13 +618,9 @@ export default function App() {
                 <div style={{fontWeight:600,fontSize:16}}>📷 Add Product Photo</div>
                 <button onClick={()=>{setShowGalleryUpload(false);setGalleryFile(null);}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>✕</button>
               </div>
-              <div style={{fontSize:13,color:"#888",marginBottom:8}}>Add multiple views — front, side, installed, close-up</div>
               <input type="file" accept="image/*" onChange={e=>setGalleryFile(e.target.files[0])} style={{width:"100%",marginBottom:16,fontSize:13}}/>
               {galleryFile&&<div style={{marginBottom:16,textAlign:"center"}}><img src={URL.createObjectURL(galleryFile)} alt="preview" style={{width:150,height:150,objectFit:"cover",borderRadius:8,border:"1px solid #eee"}}/><div style={{fontSize:12,color:"#888",marginTop:4}}>{galleryFile.name}</div></div>}
-              <button onClick={()=>uploadGalleryImage(selectedProduct.id)} disabled={galleryUploading||!galleryFile}
-                style={{width:"100%",padding:12,background:galleryUploading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:galleryUploading?"not-allowed":"pointer"}}>
-                {galleryUploading?"⏳ Uploading...":"📤 Add to Gallery"}
-              </button>
+              <button onClick={()=>uploadGalleryImage(selectedProduct.id)} disabled={galleryUploading||!galleryFile} style={{width:"100%",padding:12,background:galleryUploading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:galleryUploading?"not-allowed":"pointer"}}>{galleryUploading?"⏳ Uploading...":"📤 Add to Gallery"}</button>
             </div>
           </div>
         )}
@@ -598,6 +654,7 @@ export default function App() {
     );
   }
 
+  // ── MAIN APP ──
   return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
 
@@ -684,10 +741,31 @@ export default function App() {
 
       <div style={{padding:"16px",paddingBottom:80}}>
 
+        {/* HOME */}
         {screen==="home"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>Select a room to renovate</div>
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Tap a room to see products</div>
+
+            {/* FESTIVAL SALE BANNERS */}
+            {sales.length>0&&(
+              <div style={{marginBottom:16}}>
+                <div style={{fontWeight:600,fontSize:14,marginBottom:10,color:"#BA7517"}}>🎉 Festival Sales Live Now!</div>
+                <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
+                  {sales.map(sale=>(
+                    <div key={sale.id} onClick={()=>loadSaleProducts(sale)}
+                      style={{flexShrink:0,width:220,borderRadius:14,padding:16,cursor:"pointer",background:sale.banner_color||"#BA7517",position:"relative",overflow:"hidden"}}>
+                      <div style={{fontSize:24,marginBottom:6}}>{sale.emoji==="Diwali"?"🪔":sale.emoji==="Summer"?"☀️":sale.emoji==="Puja"?"🙏":"🎉"}</div>
+                      <div style={{color:"white",fontWeight:700,fontSize:14,marginBottom:4}}>{sale.name}</div>
+                      <div style={{color:"rgba(255,255,255,0.85)",fontSize:11,marginBottom:8}}>{sale.description?.substring(0,50)}...</div>
+                      <div style={{background:"rgba(255,255,255,0.25)",borderRadius:8,padding:"4px 10px",display:"inline-block",color:"white",fontSize:12,fontWeight:700,marginBottom:8}}>Up to {sale.discount_pct}% OFF</div>
+                      <div><CountdownTimer endDate={sale.end_date}/></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {ROOMS.map(room=>(
                 <div key={room.id} onClick={()=>{setRoom(room);setScreen("products");track("view_room",room.id,null,room.name);}}
@@ -697,6 +775,7 @@ export default function App() {
                 </div>
               ))}
             </div>
+
             {topRated.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>⭐ Top Rated Products</div>
@@ -712,11 +791,13 @@ export default function App() {
                 </div>
               </div>
             )}
+
             <div style={{background:"white",borderRadius:12,padding:16,marginTop:16}}>
               <div style={{fontWeight:600,marginBottom:8}}>💰 Your Budget</div>
               <input type="range" min={10000} max={500000} step={5000} value={budget} onChange={e=>setBudget(Number(e.target.value))} style={{width:"100%",accentColor:"#BA7517"}}/>
               <div style={{textAlign:"center",fontWeight:600,color:"#BA7517",fontSize:18}}>₹{budget.toLocaleString("en-IN")}</div>
             </div>
+
             {cart.length>0&&(
               <div style={{background:"#FFF3DC",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div><div style={{fontWeight:600,fontSize:14}}>🛒 {cart.length} items in cart</div><div style={{fontSize:13,color:"#BA7517"}}>₹{grandTotal.toLocaleString("en-IN")} total</div></div>
@@ -726,6 +807,7 @@ export default function App() {
           </div>
         )}
 
+        {/* PRODUCTS */}
         {screen==="products"&&(
           <div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -737,6 +819,7 @@ export default function App() {
           </div>
         )}
 
+        {/* SEARCH */}
         {screen==="search"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>🔍 Search Products</div>
@@ -767,11 +850,12 @@ export default function App() {
             )}
             {searching&&<div style={{textAlign:"center",padding:30,color:"#888"}}>🔍 Searching...</div>}
             {!searching&&searchResults.length>0&&<div><div style={{fontSize:13,color:"#888",marginBottom:12}}>Found <strong>{searchResults.length}</strong> products</div>{searchResults.map(p=><ProductCard key={p.id} p={p}/>)}</div>}
-            {!searching&&searchResults.length===0&&!searchQuery&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>Search across all rooms</div><div style={{fontSize:12,marginTop:8}}>Try: tile, tap, wardrobe, light</div></div>}
+            {!searching&&searchResults.length===0&&!searchQuery&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>Search across all rooms</div></div>}
             {!searching&&searchResults.length===0&&searchQuery&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>No results for "{searchQuery}"</div></div>}
           </div>
         )}
 
+        {/* AI CHAT */}
         {screen==="chat"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -801,6 +885,7 @@ export default function App() {
           </div>
         )}
 
+        {/* RECOMMENDATIONS */}
         {screen==="recommendations"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>✨ Recommended For You</div>
@@ -827,6 +912,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ORDERS */}
         {screen==="orders"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>📦 My Orders</div>
@@ -851,6 +937,7 @@ export default function App() {
           </div>
         )}
 
+        {/* PROFILE */}
         {screen==="profile"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>👤 My Profile</div>
@@ -896,6 +983,7 @@ export default function App() {
           </div>
         )}
 
+        {/* CART */}
         {screen==="cart"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>🛒 Your Cart</div>
