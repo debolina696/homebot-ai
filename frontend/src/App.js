@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 const API = "http://127.0.0.1:5000";
 
@@ -39,22 +39,16 @@ const StarRating = ({rating, onRate, size=20}) => (
   </div>
 );
 
-// Countdown Timer Component
 const CountdownTimer = ({endDate}) => {
   const [timeLeft, setTimeLeft] = useState({});
   useEffect(() => {
     const calc = () => {
       const diff = new Date(endDate) - new Date();
-      if (diff <= 0) { setTimeLeft({expired:true}); return; }
-      setTimeLeft({
-        days:    Math.floor(diff / (1000*60*60*24)),
-        hours:   Math.floor((diff%(1000*60*60*24))/(1000*60*60)),
-        minutes: Math.floor((diff%(1000*60*60))/(1000*60)),
-        seconds: Math.floor((diff%(1000*60))/1000),
-      });
+      if (diff<=0) { setTimeLeft({expired:true}); return; }
+      setTimeLeft({days:Math.floor(diff/(1000*60*60*24)),hours:Math.floor((diff%(1000*60*60*24))/(1000*60*60)),minutes:Math.floor((diff%(1000*60*60))/(1000*60)),seconds:Math.floor((diff%(1000*60))/1000)});
     };
     calc();
-    const timer = setInterval(calc, 1000);
+    const timer = setInterval(calc,1000);
     return () => clearInterval(timer);
   }, [endDate]);
   if (timeLeft.expired) return <span style={{color:"#c00",fontSize:11}}>Sale Ended</span>;
@@ -149,11 +143,14 @@ export default function App() {
   const [showGalleryUpload, setShowGalleryUpload] = useState(false);
   const [galleryFile, setGalleryFile]         = useState(null);
   const [galleryUploading, setGalleryUploading] = useState(false);
-  // Day 23 — Festival Sales
   const [sales, setSales]                     = useState([]);
   const [selectedSale, setSelectedSale]       = useState(null);
   const [saleProducts, setSaleProducts]       = useState([]);
   const [saleLoading, setSaleLoading]         = useState(false);
+  // Day 25 — Wishlist
+  const [wishlist, setWishlist]               = useState([]);
+  const [wishlistIds, setWishlistIds]         = useState(new Set());
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -170,10 +167,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user&&screen==="orders")  loadOrders();
-    if (user&&screen==="profile") { loadProfile(); loadStyleProfile(); }
-    if (screen==="recommendations") loadRecommendations();
-    if (screen==="sales") loadSales();
+    if (user&&screen==="orders")      loadOrders();
+    if (user&&screen==="profile")     { loadProfile(); loadStyleProfile(); }
+    if (user&&screen==="wishlist")    loadWishlist();
+    if (screen==="recommendations")   loadRecommendations();
+    if (screen==="sales")             loadSales();
     trackPage(screen);
   }, [screen, user]);
 
@@ -183,11 +181,48 @@ export default function App() {
     if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); }
   }, [selectedProduct]);
 
+  useEffect(() => {
+    if (user) loadWishlist();
+  }, [user]);
+
   const loadTopRated       = async () => { try { const r=await fetch(`${API}/api/top-rated`); const d=await r.json(); setTopRated(d.products||[]); } catch {} };
   const loadBundles        = async (id) => { try { const r=await fetch(`${API}/api/bundles/${id}`); const d=await r.json(); setBundles(d); } catch {} };
   const loadProductReviews = async (id) => { try { const r=await fetch(`${API}/api/reviews/${id}`); const d=await r.json(); setProductReviews(d); } catch { setProductReviews(null); } };
   const loadProductGallery = async (id) => { try { const r=await fetch(`${API}/api/gallery/${id}`); const d=await r.json(); setProductGallery(d.images||[]); setGalleryIndex(0); } catch { setProductGallery([]); } };
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
+
+  const loadWishlist = async () => {
+    if (!user) return;
+    setWishlistLoading(true);
+    try {
+      const r=await fetch(`${API}/api/wishlist/${user.id}`);
+      const d=await r.json();
+      setWishlist(d.wishlist||[]);
+      setWishlistIds(new Set((d.wishlist||[]).map(i=>i.id)));
+    } catch { setWishlist([]); }
+    setWishlistLoading(false);
+  };
+
+  const toggleWishlist = async (product) => {
+    if (!user) { alert("Please login to use wishlist!"); return; }
+    const isInWishlist = wishlistIds.has(product.id);
+    if (isInWishlist) {
+      try {
+        await fetch(`${API}/api/wishlist/${user.id}/${product.id}`,{method:"DELETE"});
+        setWishlistIds(prev=>{const n=new Set(prev);n.delete(product.id);return n;});
+        setWishlist(prev=>prev.filter(i=>i.id!==product.id));
+      } catch(err) { alert("Failed: "+err.message); }
+    } else {
+      try {
+        const r=await fetch(`${API}/api/wishlist`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user.id,product_id:product.id})});
+        const d=await r.json();
+        if (d.status==="ok"||d.status==="exists") {
+          setWishlistIds(prev=>new Set([...prev,product.id]));
+          setWishlist(prev=>[...prev,{...product}]);
+        }
+      } catch(err) { alert("Failed: "+err.message); }
+    }
+  };
 
   const loadSaleProducts = async (sale) => {
     setSelectedSale(sale); setSaleLoading(true);
@@ -382,6 +417,17 @@ export default function App() {
     select: {width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",background:"white",boxSizing:"border-box"}
   };
 
+  const WishlistBtn = ({product}) => {
+    const isWishlisted = wishlistIds.has(product.id);
+    return (
+      <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}}
+        style={{background:"none",border:"none",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}
+        title={isWishlisted?"Remove from wishlist":"Add to wishlist"}>
+        {isWishlisted ? "❤️" : "🤍"}
+      </button>
+    );
+  };
+
   const ProductCard = ({p, saleDiscount=0}) => {
     const salePrice = saleDiscount>0 ? Math.round(p.price*(1-saleDiscount/100)) : null;
     return (
@@ -392,7 +438,10 @@ export default function App() {
           {saleDiscount>0&&<div style={{position:"absolute",top:-4,left:-4,background:"#FF4444",color:"white",borderRadius:6,padding:"2px 5px",fontSize:10,fontWeight:700}}>{saleDiscount}% OFF</div>}
         </div>
         <div style={{flex:1}}>
-          <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{fontWeight:600,fontSize:14,flex:1}}>{p.name}</div>
+            <WishlistBtn product={p}/>
+          </div>
           <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.description}</div>
           <div style={{marginTop:6}}>
             {salePrice?(
@@ -417,7 +466,6 @@ export default function App() {
     );
   };
 
-  // ── LOGIN ──
   if (screen==="login") return (
     <div style={{fontFamily:"sans-serif",maxWidth:400,margin:"0 auto",padding:"40px 20px",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:56}}>🏠</div><div style={{fontSize:24,fontWeight:700,color:"#BA7517"}}>HomeBot AI</div><div style={{fontSize:13,color:"#888",marginTop:4}}>Interior Design Assistant</div></div>
@@ -446,7 +494,6 @@ export default function App() {
     </div>
   );
 
-  // ── ORDER TRACKING ──
   if (screen==="track"&&trackedOrder) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
@@ -487,7 +534,6 @@ export default function App() {
     </div>
   );
 
-  // ── SALE DETAIL PAGE ──
   if (screen==="sale_detail"&&selectedSale) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:selectedSale.banner_color||"#BA7517",padding:"16px 20px"}}>
@@ -495,7 +541,7 @@ export default function App() {
           <button onClick={()=>setScreen("home")} style={{background:"none",border:"none",color:"white",fontSize:20,cursor:"pointer"}}>←</button>
           <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
         </div>
-        <div style={{color:"white",fontWeight:700,fontSize:20}}>{selectedSale.emoji} {selectedSale.name}</div>
+        <div style={{color:"white",fontWeight:700,fontSize:20}}>{selectedSale.emoji==="Diwali"?"🪔":selectedSale.emoji==="Summer"?"☀️":selectedSale.emoji==="Puja"?"🙏":"🎉"} {selectedSale.name}</div>
         <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,marginTop:4}}>{selectedSale.description}</div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 12px",color:"white",fontSize:13,fontWeight:600}}>Up to {selectedSale.discount_pct}% OFF</div>
@@ -504,14 +550,12 @@ export default function App() {
         </div>
       </div>
       <div style={{padding:16,paddingBottom:80}}>
-        {saleLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading sale products...</div>}
-        {!saleLoading&&saleProducts.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}>No products in this sale yet</div>}
+        {saleLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
         {!saleLoading&&saleProducts.map(p=><ProductCard key={p.id} p={p} saleDiscount={p.discount_pct||selectedSale.discount_pct}/>)}
       </div>
     </div>
   );
 
-  // ── PRODUCT DETAIL PAGE ──
   if (screen==="product_detail"&&selectedProduct) {
     const avg=productReviews?.summary?.avg_rating||0;
     const total=productReviews?.summary?.total_reviews||0;
@@ -522,7 +566,10 @@ export default function App() {
             <button onClick={()=>setScreen("products")} style={{background:"none",border:"none",color:"white",fontSize:20,cursor:"pointer"}}>←</button>
             <div style={{color:"white",fontWeight:600,fontSize:16}}>Product Details</div>
           </div>
-          <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <WishlistBtn product={selectedProduct}/>
+            <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
+          </div>
         </div>
         <div style={{padding:16,paddingBottom:80}}>
 
@@ -539,7 +586,10 @@ export default function App() {
 
           {/* PRODUCT INFO */}
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
-            <div style={{fontWeight:700,fontSize:18}}>{selectedProduct.name}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{fontWeight:700,fontSize:18,flex:1}}>{selectedProduct.name}</div>
+              <WishlistBtn product={selectedProduct}/>
+            </div>
             <div style={{fontSize:13,color:"#888",marginTop:4}}>{selectedProduct.description}</div>
             <div style={{color:"#BA7517",fontWeight:700,fontSize:24,marginTop:8}}>₹{Number(selectedProduct.price).toLocaleString("en-IN")}<span style={{fontSize:13,color:"#888",fontWeight:400}}> / {selectedProduct.unit}</span></div>
             {total>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}><StarRating rating={Math.round(avg)} size={18}/><span style={{fontSize:14,fontWeight:600}}>{Number(avg).toFixed(1)}</span><span style={{fontSize:13,color:"#888"}}>({total} reviews)</span></div>}
@@ -548,7 +598,12 @@ export default function App() {
                 <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0",fontSize:13}}><span style={{color:"#888"}}>{spec.label}</span><span style={{fontWeight:500}}>{spec.value}</span></div>
               ))}
             </div>
-            <button onClick={()=>addToCart(selectedProduct)} style={{width:"100%",marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>+ Add to Cart</button>
+            <div style={{display:"flex",gap:8,marginTop:16}}>
+              <button onClick={()=>addToCart(selectedProduct)} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>+ Add to Cart</button>
+              <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 18px",fontSize:20,cursor:"pointer"}}>
+                {wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}
+              </button>
+            </div>
           </div>
 
           {/* BUNDLE */}
@@ -610,7 +665,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* GALLERY UPLOAD MODAL */}
         {showGalleryUpload&&(
           <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400}}>
@@ -625,7 +679,6 @@ export default function App() {
           </div>
         )}
 
-        {/* REVIEW FORM MODAL */}
         {showReviewForm&&(
           <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:420,maxHeight:"90vh",overflowY:"auto"}}>
@@ -654,13 +707,15 @@ export default function App() {
     );
   }
 
-  // ── MAIN APP ──
   return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
 
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer",position:"relative"}} onClick={()=>setScreen("wishlist")}>
+            ❤️ {wishlistIds.size>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#FF4444",color:"white",borderRadius:"50%",width:16,height:16,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{wishlistIds.size}</span>}
+          </div>
           <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 10px",fontSize:12,color:"white",cursor:"pointer"}} onClick={()=>{setUser(null);setScreen("login");setCart([]);track("logout");}}>Logout</div>
         </div>
@@ -674,7 +729,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* UPLOAD MODAL */}
       {uploadScreen&&(
         <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400,maxHeight:"80vh",overflowY:"auto"}}>
@@ -694,7 +748,6 @@ export default function App() {
         </div>
       )}
 
-      {/* STYLE MODAL */}
       {showStyleSetup&&(
         <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400,maxHeight:"80vh",overflowY:"auto"}}>
@@ -722,7 +775,6 @@ export default function App() {
         </div>
       )}
 
-      {/* CHATBOT RATING */}
       {showChatbotRating&&(
         <div style={{position:"fixed",bottom:90,left:"50%",transform:"translateX(-50%)",width:"90%",maxWidth:400,background:"white",borderRadius:16,padding:20,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",zIndex:150}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -741,20 +793,16 @@ export default function App() {
 
       <div style={{padding:"16px",paddingBottom:80}}>
 
-        {/* HOME */}
         {screen==="home"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>Select a room to renovate</div>
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Tap a room to see products</div>
-
-            {/* FESTIVAL SALE BANNERS */}
             {sales.length>0&&(
               <div style={{marginBottom:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:10,color:"#BA7517"}}>🎉 Festival Sales Live Now!</div>
                 <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
                   {sales.map(sale=>(
-                    <div key={sale.id} onClick={()=>loadSaleProducts(sale)}
-                      style={{flexShrink:0,width:220,borderRadius:14,padding:16,cursor:"pointer",background:sale.banner_color||"#BA7517",position:"relative",overflow:"hidden"}}>
+                    <div key={sale.id} onClick={()=>loadSaleProducts(sale)} style={{flexShrink:0,width:220,borderRadius:14,padding:16,cursor:"pointer",background:sale.banner_color||"#BA7517"}}>
                       <div style={{fontSize:24,marginBottom:6}}>{sale.emoji==="Diwali"?"🪔":sale.emoji==="Summer"?"☀️":sale.emoji==="Puja"?"🙏":"🎉"}</div>
                       <div style={{color:"white",fontWeight:700,fontSize:14,marginBottom:4}}>{sale.name}</div>
                       <div style={{color:"rgba(255,255,255,0.85)",fontSize:11,marginBottom:8}}>{sale.description?.substring(0,50)}...</div>
@@ -765,7 +813,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {ROOMS.map(room=>(
                 <div key={room.id} onClick={()=>{setRoom(room);setScreen("products");track("view_room",room.id,null,room.name);}}
@@ -775,7 +822,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             {topRated.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>⭐ Top Rated Products</div>
@@ -791,13 +837,11 @@ export default function App() {
                 </div>
               </div>
             )}
-
             <div style={{background:"white",borderRadius:12,padding:16,marginTop:16}}>
               <div style={{fontWeight:600,marginBottom:8}}>💰 Your Budget</div>
               <input type="range" min={10000} max={500000} step={5000} value={budget} onChange={e=>setBudget(Number(e.target.value))} style={{width:"100%",accentColor:"#BA7517"}}/>
               <div style={{textAlign:"center",fontWeight:600,color:"#BA7517",fontSize:18}}>₹{budget.toLocaleString("en-IN")}</div>
             </div>
-
             {cart.length>0&&(
               <div style={{background:"#FFF3DC",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div><div style={{fontWeight:600,fontSize:14}}>🛒 {cart.length} items in cart</div><div style={{fontSize:13,color:"#BA7517"}}>₹{grandTotal.toLocaleString("en-IN")} total</div></div>
@@ -807,7 +851,51 @@ export default function App() {
           </div>
         )}
 
-        {/* PRODUCTS */}
+        {/* WISHLIST SCREEN */}
+        {screen==="wishlist"&&(
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{fontSize:16,fontWeight:600}}>❤️ My Wishlist ({wishlist.length})</div>
+              <button onClick={()=>setScreen("home")} style={{fontSize:12,color:"#BA7517",background:"none",border:"none",cursor:"pointer"}}>← Back</button>
+            </div>
+            {wishlistLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
+            {!wishlistLoading&&wishlist.length===0&&(
+              <div style={{textAlign:"center",padding:40,color:"#888"}}>
+                <div style={{fontSize:48}}>🤍</div>
+                <div style={{marginTop:12,fontWeight:500,fontSize:15}}>Your wishlist is empty!</div>
+                <div style={{fontSize:13,marginTop:6,color:"#aaa"}}>Tap 🤍 on any product to save it</div>
+                <button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button>
+              </div>
+            )}
+            {wishlist.map(p=>(
+              <div key={p.id} style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12}}>
+                <div style={{flexShrink:0,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                  {p.image_url?<img src={p.image_url} alt={p.name} style={{width:80,height:80,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/80x80/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:80,height:80,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>🏠</div>}
+                </div>
+                <div style={{flex:1,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                  <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
+                  <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
+                  <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}<span style={{fontSize:11,color:"#888",fontWeight:400}}> / {p.unit}</span></div>
+                  {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={12}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+                  <button onClick={()=>toggleWishlist(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22}}>❤️</button>
+                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Cart</button>
+                </div>
+              </div>
+            ))}
+            {wishlist.length>0&&(
+              <div style={{background:"#FFF3DC",borderRadius:12,padding:14,textAlign:"center"}}>
+                <div style={{fontSize:13,color:"#BA7517",fontWeight:500,marginBottom:8}}>Add all wishlist items to cart?</div>
+                <button onClick={()=>{wishlist.forEach(p=>addToCart(p));alert(`✅ ${wishlist.length} items added to cart!`);setScreen("cart");}}
+                  style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>
+                  🛒 Add All to Cart
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {screen==="products"&&(
           <div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -819,7 +907,6 @@ export default function App() {
           </div>
         )}
 
-        {/* SEARCH */}
         {screen==="search"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>🔍 Search Products</div>
@@ -833,7 +920,6 @@ export default function App() {
             </div>
             {showFilters&&(
               <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
-                <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:"#666"}}>FILTER BY</div>
                 <div style={{fontSize:12,color:"#888",marginBottom:4}}>Room</div>
                 <select value={filterRoom} onChange={e=>setFilterRoom(e.target.value)} style={S.select}><option value="">All Rooms</option>{ROOMS.map(r=><option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}</select>
                 <div style={{fontSize:12,color:"#888",marginBottom:4}}>Style</div>
@@ -855,7 +941,6 @@ export default function App() {
           </div>
         )}
 
-        {/* AI CHAT */}
         {screen==="chat"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -885,7 +970,6 @@ export default function App() {
           </div>
         )}
 
-        {/* RECOMMENDATIONS */}
         {screen==="recommendations"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>✨ Recommended For You</div>
@@ -900,7 +984,6 @@ export default function App() {
                       {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:100,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/150x100/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:100,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
                       <div style={{fontWeight:500,fontSize:12,marginTop:6}}>{p.name}</div>
                       <div style={{color:"#BA7517",fontWeight:600,fontSize:13,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                      <div style={{fontSize:10,color:"#888"}}>{p.room_name}</div>
                       <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{width:"100%",marginTop:6,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"4px 0",cursor:"pointer",fontSize:11}}>+ Add</button>
                     </div>
                   ))}
@@ -912,7 +995,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ORDERS */}
         {screen==="orders"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>📦 My Orders</div>
@@ -937,7 +1019,6 @@ export default function App() {
           </div>
         )}
 
-        {/* PROFILE */}
         {screen==="profile"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>👤 My Profile</div>
@@ -953,6 +1034,7 @@ export default function App() {
                     <button onClick={()=>setEditProfile(true)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>✏️ Edit</button>
                     <button onClick={()=>setUploadScreen(true)} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>📸 Images</button>
                     <button onClick={()=>setShowStyleSetup(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px solid #BA7517",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>🎨 Style</button>
+                    <button onClick={()=>setScreen("wishlist")} style={{background:"#FCEBEB",color:"#c00",border:"1px solid #fcc",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>❤️ Wishlist ({wishlistIds.size})</button>
                   </div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
@@ -983,7 +1065,6 @@ export default function App() {
           </div>
         )}
 
-        {/* CART */}
         {screen==="cart"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>🛒 Your Cart</div>

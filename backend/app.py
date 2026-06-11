@@ -1271,5 +1271,99 @@ def delete_sale(sale_id):
         return jsonify({"status":"ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    # ── WISHLIST ROUTES ──
+
+@app.route("/api/wishlist/<int:user_id>", methods=["GET"])
+def get_wishlist(user_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT w.id as wishlist_id, w.created_at,
+               p.*, r.name as room_name,
+               COALESCE(AVG(pr.rating),0) as avg_rating,
+               COUNT(pr.id) as review_count
+               FROM wishlist w
+               JOIN products p ON w.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN product_reviews pr ON pr.product_id = p.id
+               WHERE w.user_id = %s
+               GROUP BY w.id, w.created_at, p.id, r.name
+               ORDER BY w.created_at DESC""",
+            (user_id,)
+        )
+        items = cursor.fetchall()
+        result = []
+        for item in items:
+            d = dict(item)
+            d["created_at"] = str(item["created_at"])
+            result.append(d)
+        cursor.close()
+        conn.close()
+        return jsonify({"wishlist": result, "count": len(result)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/wishlist", methods=["POST"])
+def add_to_wishlist():
+    try:
+        data       = request.get_json()
+        user_id    = data.get("user_id", 1)
+        product_id = data.get("product_id")
+        conn       = get_db()
+        cursor     = conn.cursor()
+        cursor.execute(
+            """INSERT INTO wishlist (user_id, product_id)
+               VALUES (%s, %s)
+               ON CONFLICT (user_id, product_id) DO NOTHING
+               RETURNING id""",
+            (user_id, product_id)
+        )
+        result = cursor.fetchone()
+        conn.commit()
+        cursor.close()
+        conn.close()
+        if result:
+            return jsonify({"status": "ok", "message": "Added to wishlist!"})
+        return jsonify({"status": "exists", "message": "Already in wishlist!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/wishlist/<int:user_id>/<int:product_id>", methods=["DELETE"])
+def remove_from_wishlist(user_id, product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM wishlist WHERE user_id=%s AND product_id=%s",
+            (user_id, product_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "ok", "message": "Removed from wishlist!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/wishlist/check/<int:user_id>/<int:product_id>", methods=["GET"])
+def check_wishlist(user_id, product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM wishlist WHERE user_id=%s AND product_id=%s",
+            (user_id, product_id)
+        )
+        exists = cursor.fetchone() is not None
+        cursor.close()
+        conn.close()
+        return jsonify({"in_wishlist": exists})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)     
