@@ -2,462 +2,435 @@ import { useState, useEffect } from "react";
 
 const API = "http://127.0.0.1:5000";
 
-const ROOMS = [
-  { id: 1, name: "Bathroom" },
-  { id: 2, name: "Bedroom" },
-  { id: 3, name: "Kitchen" },
-  { id: 4, name: "Living Room" },
-  { id: 5, name: "Dining Room" },
-  { id: 6, name: "Study Room" },
-  { id: 7, name: "Puja Room" },
-  { id: 8, name: "Exterior" },
-];
-
-const STYLES = ["modern", "classic", "traditional", "luxury"];
-
 export default function Admin() {
-  const [screen, setScreen]         = useState("dashboard");
-  const [stats, setStats]           = useState(null);
-  const [products, setProducts]     = useState([]);
-  const [loading, setLoading]       = useState(false);
-  const [showForm, setShowForm]     = useState(false);
-  const [editProduct, setEditProduct] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterRoom, setFilterRoom] = useState("");
+  const [tab, setTab]                   = useState("dashboard");
+  const [stats, setStats]               = useState(null);
+  const [products, setProducts]         = useState([]);
+  const [analytics, setAnalytics]       = useState(null);
+  const [sales, setSales]               = useState([]);
+  const [showSaleForm, setShowSaleForm] = useState(false);
+  const [editingSale, setEditingSale]   = useState(null);
+  const [saleForm, setSaleForm]         = useState({
+    name:"", description:"", discount_pct:10,
+    start_date:"", end_date:"", banner_color:"#BA7517", emoji:"sale"
+  });
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [editingProduct, setEditingProduct]   = useState(null);
+  const [productForm, setProductForm]         = useState({
+    room_id:"1", name:"", description:"", price:"",
+    unit:"sqft", stock_qty:"100", style_tag:"modern",
+    brand:"", length_cm:"", width_cm:"", height_cm:"",
+    material:"", color:"", image_url:""
+  });
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg]         = useState("");
 
-  const emptyForm = {
-    room_id: 1, name: "", description: "", price: "",
-    unit: "per piece", stock_qty: "", style_tag: "modern",
-    brand: "", length_cm: "", width_cm: "", height_cm: "",
-    material: "", color: "", image_url: ""
-  };
-  const [form, setForm] = useState(emptyForm);
+  const ROOMS = [
+    {id:1,name:"Bathroom"},{id:2,name:"Bedroom"},
+    {id:3,name:"Kitchen"},{id:4,name:"Living Room"},
+    {id:5,name:"Dining Room"},{id:6,name:"Study Room"},
+    {id:7,name:"Puja Room"},{id:8,name:"Exterior"}
+  ];
 
   useEffect(() => {
-    if (screen === "dashboard") loadStats();
-    if (screen === "products")  loadProducts();
-  }, [screen]);
+    loadStats();
+    loadProducts();
+    loadAnalytics();
+    loadSales();
+  }, []);
 
   const loadStats = async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}/api/admin/stats`);
-      const d = await r.json();
-      setStats(d);
-    } catch { setStats(null); }
-    setLoading(false);
+    try { const r=await fetch(`${API}/api/admin/stats`); const d=await r.json(); setStats(d); } catch {}
   };
 
   const loadProducts = async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}/api/admin/products`);
-      const d = await r.json();
-      setProducts(d.products || []);
-    } catch { setProducts([]); }
-    setLoading(false);
+    try { const r=await fetch(`${API}/api/admin/products`); const d=await r.json(); setProducts(d.products||[]); } catch {}
+  };
+
+  const loadAnalytics = async () => {
+    try { const r=await fetch(`${API}/api/analytics/dashboard`); const d=await r.json(); setAnalytics(d); } catch {}
+  };
+
+  const loadSales = async () => {
+    try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {}
   };
 
   const saveProduct = async () => {
-    if (!form.name || !form.price) {
-      alert("Name and price are required!");
-      return;
-    }
+    setLoading(true);
     try {
-      const url    = editProduct
-        ? `${API}/api/admin/products/${editProduct.id}`
-        : `${API}/api/admin/products`;
-      const method = editProduct ? "PUT" : "POST";
-      const r = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          room_id:   Number(form.room_id),
-          price:     Number(form.price),
-          stock_qty: Number(form.stock_qty),
-          length_cm: form.length_cm ? Number(form.length_cm) : null,
-          width_cm:  form.width_cm  ? Number(form.width_cm)  : null,
-          height_cm: form.height_cm ? Number(form.height_cm) : null,
-        })
-      });
-      const d = await r.json();
-      if (d.status === "ok") {
-        alert(editProduct ? "✅ Product updated!" : "✅ Product added!");
-        setShowForm(false);
-        setEditProduct(null);
-        setForm(emptyForm);
-        loadProducts();
-      } else {
-        alert("Error: " + d.error);
-      }
-    } catch (err) { alert("Failed: " + err.message); }
+      const url    = editingProduct ? `${API}/api/admin/products/${editingProduct.id}` : `${API}/api/admin/products`;
+      const method = editingProduct ? "PUT" : "POST";
+      const r      = await fetch(url,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify({...productForm,price:Number(productForm.price),room_id:Number(productForm.room_id),stock_qty:Number(productForm.stock_qty)})});
+      const d      = await r.json();
+      if (d.status==="ok") { setMsg(editingProduct?"✅ Product updated!":"✅ Product added!"); setShowProductForm(false); setEditingProduct(null); loadProducts(); resetProductForm(); }
+      else setMsg("Error: "+d.error);
+    } catch(err) { setMsg("Failed: "+err.message); }
+    setLoading(false);
   };
 
-  const deleteProduct = async (id, name) => {
-    if (!window.confirm(`Delete "${name}"? This cannot be undone!`)) return;
+  const deleteProduct = async (id) => {
+    if (!window.confirm("Delete this product?")) return;
     try {
-      const r = await fetch(`${API}/api/admin/products/${id}`, {
-        method: "DELETE"
-      });
+      await fetch(`${API}/api/admin/products/${id}`,{method:"DELETE"});
+      setMsg("✅ Product deleted!"); loadProducts();
+    } catch(err) { setMsg("Failed: "+err.message); }
+  };
+
+  const saveSale = async () => {
+    if (!saleForm.name||!saleForm.end_date) { setMsg("Please fill name and end date!"); return; }
+    setLoading(true);
+    try {
+      const url    = editingSale ? `${API}/api/sales/${editingSale.id}` : `${API}/api/sales`;
+      const method = editingSale ? "PUT" : "POST";
+      const body   = editingSale
+        ? { name:saleForm.name, description:saleForm.description, discount_pct:Number(saleForm.discount_pct), end_date:saleForm.end_date, is_active:true }
+        : { ...saleForm, discount_pct:Number(saleForm.discount_pct), start_date:saleForm.start_date||new Date().toISOString() };
+      const r = await fetch(url,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const d = await r.json();
-      if (d.status === "ok") {
-        alert("✅ Product deleted!");
-        loadProducts();
-      }
-    } catch (err) { alert("Failed: " + err.message); }
+      if (d.status==="ok") { setMsg(editingSale?"✅ Sale updated!":"✅ Sale created!"); setShowSaleForm(false); setEditingSale(null); resetSaleForm(); loadSales(); }
+      else setMsg("Error: "+d.error);
+    } catch(err) { setMsg("Failed: "+err.message); }
+    setLoading(false);
   };
 
-  const openEdit = (p) => {
-    setEditProduct(p);
-    setForm({
-      room_id:     p.room_id,
-      name:        p.name,
-      description: p.description || "",
-      price:       p.price,
-      unit:        p.unit || "per piece",
-      stock_qty:   p.stock_qty || 0,
-      style_tag:   p.style_tag || "modern",
-      brand:       p.brand || "",
-      length_cm:   p.length_cm || "",
-      width_cm:    p.width_cm  || "",
-      height_cm:   p.height_cm || "",
-      material:    p.material  || "",
-      color:       p.color     || "",
-      image_url:   p.image_url || ""
-    });
-    setShowForm(true);
+  const deleteSale = async (id) => {
+    if (!window.confirm("End this sale?")) return;
+    try {
+      await fetch(`${API}/api/sales/${id}`,{method:"DELETE"});
+      setMsg("✅ Sale ended!"); loadSales();
+    } catch(err) { setMsg("Failed: "+err.message); }
   };
 
-  const filteredProducts = products.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        p.brand?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchRoom   = filterRoom ? p.room_id === Number(filterRoom) : true;
-    return matchSearch && matchRoom;
-  });
-
-  const inputStyle = {
-    width: "100%", padding: "8px 12px", borderRadius: 6,
-    border: "1px solid #ddd", fontSize: 13, outline: "none",
-    boxSizing: "border-box", marginBottom: 8
+  const editSale = (sale) => {
+    setEditingSale(sale);
+    setSaleForm({ name:sale.name, description:sale.description||"", discount_pct:sale.discount_pct, start_date:sale.start_date?.split("T")[0]||"", end_date:sale.end_date?.split("T")[0]||"", banner_color:sale.banner_color||"#BA7517", emoji:sale.emoji||"sale" });
+    setShowSaleForm(true);
   };
 
-  const labelStyle = {
-    fontSize: 11, color: "#666",
-    marginBottom: 2, display: "block"
+  const resetSaleForm    = () => setSaleForm({name:"",description:"",discount_pct:10,start_date:"",end_date:"",banner_color:"#BA7517",emoji:"sale"});
+  const resetProductForm = () => setProductForm({room_id:"1",name:"",description:"",price:"",unit:"sqft",stock_qty:"100",style_tag:"modern",brand:"",length_cm:"",width_cm:"",height_cm:"",material:"",color:"",image_url:""});
+
+  const startEditProduct = (p) => {
+    setEditingProduct(p);
+    setProductForm({ room_id:String(p.room_id), name:p.name, description:p.description||"", price:String(p.price), unit:p.unit||"sqft", stock_qty:String(p.stock_qty||0), style_tag:p.style_tag||"modern", brand:p.brand||"", length_cm:String(p.length_cm||""), width_cm:String(p.width_cm||""), height_cm:String(p.height_cm||""), material:p.material||"", color:p.color||"", image_url:p.image_url||"" });
+    setShowProductForm(true);
+  };
+
+  const S = {
+    input:  {width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #ddd",fontSize:13,marginBottom:10,outline:"none",boxSizing:"border-box"},
+    select: {width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #ddd",fontSize:13,marginBottom:10,outline:"none",background:"white",boxSizing:"border-box"},
+    label:  {fontSize:12,color:"#666",display:"block",marginBottom:3}
+  };
+
+  // ── SALE EMOJI DISPLAY ──
+  const saleEmoji = (emoji) => {
+    const map = {Diwali:"🪔",Summer:"☀️",Puja:"🙏",New:"🏠",sale:"🎉"};
+    return map[emoji] || "🎉";
+  };
+
+  // ── TIME LEFT ──
+  const timeLeft = (endDate) => {
+    const diff = new Date(endDate) - new Date();
+    if (diff<=0) return "Expired";
+    const days  = Math.floor(diff/(1000*60*60*24));
+    const hours = Math.floor((diff%(1000*60*60*24))/(1000*60*60));
+    return days>0 ? `${days}d ${hours}h left` : `${hours}h left`;
   };
 
   return (
-    <div style={{ fontFamily: "sans-serif", background: "#f0f2f5", minHeight: "100vh" }}>
+    <div style={{fontFamily:"sans-serif",maxWidth:900,margin:"0 auto",padding:20,background:"#f8f9fa",minHeight:"100vh"}}>
 
       {/* Header */}
-      <div style={{ background: "#1a1a2e", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
-          🏠 HomeBot AI — Admin Panel
+      <div style={{background:"#BA7517",borderRadius:12,padding:"16px 20px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div><div style={{color:"white",fontWeight:700,fontSize:20}}>🏠 HomeBot AI — Admin Panel</div><div style={{color:"#FFE0A0",fontSize:13,marginTop:2}}>Manage products, sales & analytics</div></div>
+        <a href="http://localhost:3000" target="_blank" rel="noreferrer" style={{background:"white",color:"#BA7517",borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:600,textDecoration:"none"}}>View App →</a>
+      </div>
+
+      {msg&&<div style={{background:"#E1F5EE",border:"1px solid #1D9E75",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:"#085041",display:"flex",justifyContent:"space-between"}}>{msg}<span style={{cursor:"pointer"}} onClick={()=>setMsg("")}>✕</span></div>}
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        {[{id:"dashboard",label:"📊 Dashboard"},{id:"products",label:"📦 Products"},{id:"sales",label:"🎉 Festival Sales"},{id:"analytics",label:"📈 Analytics"}].map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{padding:"8px 18px",borderRadius:20,border:"none",cursor:"pointer",fontSize:13,fontWeight:500,background:tab===t.id?"#BA7517":"white",color:tab===t.id?"white":"#555",boxShadow:tab===t.id?"0 2px 8px rgba(186,117,23,0.3)":"none"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── DASHBOARD TAB ── */}
+      {tab==="dashboard"&&stats&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+            {[{label:"Total Products",value:stats.total_products,icon:"📦",color:"#BA7517"},{label:"Total Users",value:stats.total_users,icon:"👥",color:"#0C447C"},{label:"Total Orders",value:stats.total_orders,icon:"🛒",color:"#085041"},{label:"Revenue",value:`₹${Number(stats.total_revenue).toLocaleString("en-IN")}`,icon:"💰",color:"#8B00FF"}].map((s,i)=>(
+              <div key={i} style={{background:"white",borderRadius:12,padding:16,textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+                <div style={{fontSize:28}}>{s.icon}</div>
+                <div style={{fontSize:22,fontWeight:700,color:s.color,marginTop:4}}>{s.value}</div>
+                <div style={{fontSize:12,color:"#888",marginTop:2}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{background:"white",borderRadius:12,padding:16}}>
+              <div style={{fontWeight:600,marginBottom:12}}>📦 Orders by Status</div>
+              {stats.orders_by_status?.map((s,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0",fontSize:13}}>
+                  <span style={{textTransform:"capitalize"}}>{s.status}</span>
+                  <span style={{fontWeight:600}}>{s.count}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"white",borderRadius:12,padding:16}}>
+              <div style={{fontWeight:600,marginBottom:12}}>🏆 Top Products</div>
+              {stats.top_products?.map((p,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0",fontSize:13}}>
+                  <span>#{i+1} {p.name?.substring(0,25)}</span>
+                  <span style={{fontWeight:600,color:"#BA7517"}}>{p.total_sold} sold</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{background:"white",borderRadius:12,padding:16,marginTop:16}}>
+            <div style={{fontWeight:600,marginBottom:12}}>💰 Revenue by Room</div>
+            {stats.revenue_by_room?.map((r,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0"}}>
+                <span style={{fontSize:13}}>{r.room}</span>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:100,height:6,background:"#f0f0f0",borderRadius:3}}><div style={{height:"100%",borderRadius:3,background:"#BA7517",width:`${Math.min((r.revenue/Math.max(...stats.revenue_by_room.map(x=>x.revenue)))*100,100)}%`}}/></div>
+                  <span style={{fontSize:12,fontWeight:600,color:"#BA7517",minWidth:60}}>₹{Number(r.revenue).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[
-            { id: "dashboard", label: "📊 Dashboard" },
-            { id: "products",  label: "📦 Products" },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => setScreen(tab.id)}
-              style={{ padding: "6px 16px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, background: screen === tab.id ? "#BA7517" : "rgba(255,255,255,0.1)", color: "white" }}>
-              {tab.label}
+      )}
+
+      {/* ── PRODUCTS TAB ── */}
+      {tab==="products"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div style={{fontSize:16,fontWeight:600}}>📦 Products ({products.length})</div>
+            <button onClick={()=>{setShowProductForm(true);setEditingProduct(null);resetProductForm();}}
+              style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>
+              + Add Product
             </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ padding: 24 }}>
-
-        {/* DASHBOARD */}
-        {screen === "dashboard" && (
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: "#1a1a2e" }}>
-              📊 Admin Dashboard
-            </div>
-
-            {loading && <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>}
-
-            {stats && (
-              <div>
-                {/* Stats cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-                  {[
-                    { label: "Total Products", value: stats.total_products,  icon: "📦", color: "#BA7517", bg: "#FFF3DC" },
-                    { label: "Total Users",    value: stats.total_users,     icon: "👥", color: "#0C447C", bg: "#E6F1FB" },
-                    { label: "Total Orders",   value: stats.total_orders,    icon: "🛒", color: "#085041", bg: "#E1F5EE" },
-                    { label: "Total Revenue",  value: `₹${Number(stats.total_revenue).toLocaleString("en-IN")}`, icon: "💰", color: "#501313", bg: "#FCEBEB" },
-                  ].map((s, i) => (
-                    <div key={i} style={{ background: s.bg, borderRadius: 12, padding: 20, border: `1px solid ${s.color}20` }}>
-                      <div style={{ fontSize: 28 }}>{s.icon}</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: s.color, marginTop: 8 }}>{s.value}</div>
-                      <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-                  {/* Orders by status */}
-                  <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Orders by Status</div>
-                    {stats.orders_by_status?.map((s, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 14 }}>
-                        <span style={{ textTransform: "capitalize" }}>{s.status}</span>
-                        <span style={{ fontWeight: 600, color: "#BA7517" }}>{s.count}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Top products */}
-                  <div style={{ background: "white", borderRadius: 12, padding: 20 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Top Products</div>
-                    {stats.top_products?.map((p, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "0.5px solid #f0f0f0", fontSize: 13 }}>
-                        <span>#{i + 1} {p.name}</span>
-                        <span style={{ fontWeight: 600, color: "#BA7517" }}>{p.total_sold} sold</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Revenue by room */}
-                  <div style={{ background: "white", borderRadius: 12, padding: 20, gridColumn: "1 / -1" }}>
-                    <div style={{ fontWeight: 600, marginBottom: 16, fontSize: 15 }}>Revenue by Room</div>
-                    {stats.revenue_by_room?.map((r, i) => (
-                      <div key={i} style={{ marginBottom: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                          <span>{r.room}</span>
-                          <span style={{ fontWeight: 600 }}>₹{Number(r.revenue).toLocaleString("en-IN")}</span>
-                        </div>
-                        <div style={{ height: 6, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{
-                            height: "100%", borderRadius: 3, background: "#BA7517",
-                            width: `${Math.min(100, (r.revenue / Math.max(...stats.revenue_by_room.map(x => x.revenue))) * 100)}%`
-                          }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                </div>
-              </div>
-            )}
           </div>
-        )}
 
-        {/* PRODUCTS */}
-        {screen === "products" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>📦 Products ({filteredProducts.length})</div>
-              <button onClick={() => { setShowForm(true); setEditProduct(null); setForm(emptyForm); }}
-                style={{ background: "#BA7517", color: "white", border: "none", borderRadius: 8, padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
-                + Add Product
-              </button>
+          {showProductForm&&(
+            <div style={{background:"white",borderRadius:12,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.1)"}}>
+              <div style={{fontWeight:600,fontSize:15,marginBottom:16}}>{editingProduct?"✏️ Edit Product":"➕ Add New Product"}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><label style={S.label}>Room</label><select value={productForm.room_id} onChange={e=>setProductForm({...productForm,room_id:e.target.value})} style={S.select}>{ROOMS.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
+                <div><label style={S.label}>Product Name *</label><input value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})} placeholder="Product name" style={S.input}/></div>
+                <div><label style={S.label}>Price (₹) *</label><input type="number" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})} placeholder="Price" style={S.input}/></div>
+                <div><label style={S.label}>Unit</label><input value={productForm.unit} onChange={e=>setProductForm({...productForm,unit:e.target.value})} placeholder="sqft / piece" style={S.input}/></div>
+                <div><label style={S.label}>Brand</label><input value={productForm.brand} onChange={e=>setProductForm({...productForm,brand:e.target.value})} placeholder="Brand name" style={S.input}/></div>
+                <div><label style={S.label}>Stock Qty</label><input type="number" value={productForm.stock_qty} onChange={e=>setProductForm({...productForm,stock_qty:e.target.value})} placeholder="Stock" style={S.input}/></div>
+                <div><label style={S.label}>Style</label><select value={productForm.style_tag} onChange={e=>setProductForm({...productForm,style_tag:e.target.value})} style={S.select}>{["modern","classic","traditional","luxury","minimalist"].map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                <div><label style={S.label}>Material</label><input value={productForm.material} onChange={e=>setProductForm({...productForm,material:e.target.value})} placeholder="Ceramic, Wood..." style={S.input}/></div>
+                <div><label style={S.label}>Color</label><input value={productForm.color} onChange={e=>setProductForm({...productForm,color:e.target.value})} placeholder="White, Beige..." style={S.input}/></div>
+                <div><label style={S.label}>Image URL</label><input value={productForm.image_url} onChange={e=>setProductForm({...productForm,image_url:e.target.value})} placeholder="https://..." style={S.input}/></div>
+              </div>
+              <div><label style={S.label}>Description</label><textarea value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})} placeholder="Product description" style={{...S.input,minHeight:60,resize:"vertical"}}/></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div><label style={S.label}>Length (cm)</label><input type="number" value={productForm.length_cm} onChange={e=>setProductForm({...productForm,length_cm:e.target.value})} style={S.input}/></div>
+                <div><label style={S.label}>Width (cm)</label><input type="number" value={productForm.width_cm} onChange={e=>setProductForm({...productForm,width_cm:e.target.value})} style={S.input}/></div>
+                <div><label style={S.label}>Height (cm)</label><input type="number" value={productForm.height_cm} onChange={e=>setProductForm({...productForm,height_cm:e.target.value})} style={S.input}/></div>
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <button onClick={saveProduct} disabled={loading}
+                  style={{flex:1,padding:10,background:loading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer"}}>
+                  {loading?"⏳ Saving...":editingProduct?"💾 Update Product":"➕ Add Product"}
+                </button>
+                <button onClick={()=>{setShowProductForm(false);setEditingProduct(null);}}
+                  style={{padding:"10px 20px",background:"#f0f0f0",color:"#555",border:"none",borderRadius:8,fontSize:14,cursor:"pointer"}}>Cancel</button>
+              </div>
             </div>
+          )}
 
-            {/* Search and filter */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-              <input
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none" }}
-              />
-              <select value={filterRoom} onChange={e => setFilterRoom(e.target.value)}
-                style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, outline: "none", background: "white" }}>
-                <option value="">All Rooms</option>
-                {ROOMS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </div>
-
-            {/* Products table */}
-            <div style={{ background: "white", borderRadius: 12, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#1a1a2e", color: "white" }}>
-                    {["Image", "Name", "Room", "Price", "Stock", "Brand", "Actions"].map(h => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 13 }}>{h}</th>
-                    ))}
+          <div style={{background:"white",borderRadius:12,overflow:"hidden"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#f8f9fa"}}>
+                  {["Image","Name","Room","Price","Stock","Brand",""].map((h,i)=>(
+                    <th key={i} style={{padding:"10px 12px",textAlign:"left",fontSize:12,color:"#666",fontWeight:600,borderBottom:"1px solid #eee"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {products.map(p=>(
+                  <tr key={p.id} style={{borderBottom:"0.5px solid #f0f0f0"}}>
+                    <td style={{padding:"8px 12px"}}>
+                      {p.image_url?<img src={p.image_url} alt={p.name} style={{width:44,height:44,borderRadius:6,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/44x44/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:44,height:44,borderRadius:6,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🏠</div>}
+                    </td>
+                    <td style={{padding:"8px 12px",fontSize:13,fontWeight:500,maxWidth:160}}>{p.name}</td>
+                    <td style={{padding:"8px 12px",fontSize:12,color:"#888"}}>{p.room_name}</td>
+                    <td style={{padding:"8px 12px",fontSize:13,fontWeight:600,color:"#BA7517"}}>₹{Number(p.price).toLocaleString("en-IN")}</td>
+                    <td style={{padding:"8px 12px",fontSize:13}}>{p.stock_qty}</td>
+                    <td style={{padding:"8px 12px",fontSize:12,color:"#666"}}>{p.brand}</td>
+                    <td style={{padding:"8px 12px"}}>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>startEditProduct(p)} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Edit</button>
+                        <button onClick={()=>deleteProduct(p.id)} style={{background:"#FCEBEB",color:"#501313",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Del</button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredProducts.map((p, i) => (
-                    <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
-                      <td style={{ padding: "10px 16px" }}>
-                        {p.image_url ? (
-                          <img src={p.image_url} alt={p.name}
-                            style={{ width: 48, height: 48, borderRadius: 6, objectFit: "cover" }}
-                            onError={e => { e.target.onerror = null; e.target.src = "https://placehold.co/48x48/FFF3DC/BA7517?text=🏠"; }} />
-                        ) : (
-                          <div style={{ width: 48, height: 48, borderRadius: 6, background: "#FFF3DC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏠</div>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 500, maxWidth: 200 }}>
-                        <div>{p.name}</div>
-                        {(p.length_cm || p.width_cm) && (
-                          <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
-                            📐 {p.length_cm && `${p.length_cm}cm`}{p.width_cm && ` × ${p.width_cm}cm`}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px 16px", fontSize: 13, color: "#BA7517" }}>{p.room_name}</td>
-                      <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 600 }}>₹{Number(p.price).toLocaleString("en-IN")}</td>
-                      <td style={{ padding: "10px 16px", fontSize: 13 }}>
-                        <span style={{ background: p.stock_qty > 10 ? "#E1F5EE" : "#FCEBEB", color: p.stock_qty > 10 ? "#085041" : "#501313", borderRadius: 4, padding: "2px 8px" }}>
-                          {p.stock_qty}
-                        </span>
-                      </td>
-                      <td style={{ padding: "10px 16px", fontSize: 13 }}>{p.brand}</td>
-                      <td style={{ padding: "10px 16px" }}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => openEdit(p)}
-                            style={{ background: "#E6F1FB", color: "#0C447C", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                            ✏️ Edit
-                          </button>
-                          <button onClick={() => deleteProduct(p.id, p.name)}
-                            style={{ background: "#FCEBEB", color: "#501313", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                            🗑️ Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
+      )}
 
-      </div>
+      {/* ── FESTIVAL SALES TAB ── */}
+      {tab==="sales"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div style={{fontSize:16,fontWeight:600}}>🎉 Festival Sales ({sales.length} active)</div>
+            <button onClick={()=>{setShowSaleForm(true);setEditingSale(null);resetSaleForm();}}
+              style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>
+              + Create Sale
+            </button>
+          </div>
 
-      {/* Add/Edit Product Modal */}
-      {showForm && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 18 }}>
-                {editProduct ? "✏️ Edit Product" : "➕ Add New Product"}
+          {showSaleForm&&(
+            <div style={{background:"white",borderRadius:12,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,0.1)"}}>
+              <div style={{fontWeight:600,fontSize:15,marginBottom:16}}>{editingSale?"✏️ Edit Sale":"🎉 Create Festival Sale"}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div style={{gridColumn:"1/-1"}}><label style={S.label}>Sale Name *</label><input value={saleForm.name} onChange={e=>setSaleForm({...saleForm,name:e.target.value})} placeholder="e.g. Diwali Dhamaka Sale" style={S.input}/></div>
+                <div style={{gridColumn:"1/-1"}}><label style={S.label}>Description</label><textarea value={saleForm.description} onChange={e=>setSaleForm({...saleForm,description:e.target.value})} placeholder="Sale description..." style={{...S.input,minHeight:50,resize:"vertical"}}/></div>
+                <div><label style={S.label}>Discount % *</label><input type="number" min="1" max="90" value={saleForm.discount_pct} onChange={e=>setSaleForm({...saleForm,discount_pct:e.target.value})} style={S.input}/></div>
+                <div><label style={S.label}>Banner Color</label>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <input type="color" value={saleForm.banner_color} onChange={e=>setSaleForm({...saleForm,banner_color:e.target.value})} style={{width:40,height:36,borderRadius:6,border:"1px solid #ddd",cursor:"pointer",padding:2}}/>
+                    <input value={saleForm.banner_color} onChange={e=>setSaleForm({...saleForm,banner_color:e.target.value})} style={{...S.input,marginBottom:0,flex:1}}/>
+                  </div>
+                </div>
+                <div><label style={S.label}>Emoji Label</label>
+                  <select value={saleForm.emoji} onChange={e=>setSaleForm({...saleForm,emoji:e.target.value})} style={S.select}>
+                    <option value="Diwali">🪔 Diwali</option>
+                    <option value="Summer">☀️ Summer</option>
+                    <option value="Puja">🙏 Puja</option>
+                    <option value="New">🏠 New Home</option>
+                    <option value="sale">🎉 General Sale</option>
+                  </select>
+                </div>
+                {!editingSale&&<div><label style={S.label}>Start Date</label><input type="date" value={saleForm.start_date} onChange={e=>setSaleForm({...saleForm,start_date:e.target.value})} style={S.input}/></div>}
+                <div><label style={S.label}>End Date *</label><input type="date" value={saleForm.end_date} onChange={e=>setSaleForm({...saleForm,end_date:e.target.value})} style={S.input}/></div>
               </div>
-              <button onClick={() => { setShowForm(false); setEditProduct(null); }}
-                style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>✕</button>
+
+              {/* Preview Banner */}
+              {saleForm.name&&(
+                <div style={{marginTop:12,marginBottom:12}}>
+                  <label style={S.label}>Preview:</label>
+                  <div style={{borderRadius:12,padding:16,background:saleForm.banner_color,display:"inline-block",minWidth:220}}>
+                    <div style={{fontSize:24,marginBottom:4}}>{saleForm.emoji==="Diwali"?"🪔":saleForm.emoji==="Summer"?"☀️":saleForm.emoji==="Puja"?"🙏":saleForm.emoji==="New"?"🏠":"🎉"}</div>
+                    <div style={{color:"white",fontWeight:700,fontSize:14}}>{saleForm.name}</div>
+                    <div style={{color:"rgba(255,255,255,0.85)",fontSize:12,marginTop:4}}>Up to {saleForm.discount_pct}% OFF</div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={saveSale} disabled={loading}
+                  style={{flex:1,padding:10,background:loading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer"}}>
+                  {loading?"⏳ Saving...":editingSale?"💾 Update Sale":"🎉 Create Sale"}
+                </button>
+                <button onClick={()=>{setShowSaleForm(false);setEditingSale(null);}}
+                  style={{padding:"10px 20px",background:"#f0f0f0",color:"#555",border:"none",borderRadius:8,fontSize:14,cursor:"pointer"}}>Cancel</button>
+              </div>
             </div>
+          )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Product Name *</label>
-                <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-                  placeholder="e.g. RAK Ceramic Floor Tile" style={inputStyle} />
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Description</label>
-                <input value={form.description} onChange={e => setForm({...form, description: e.target.value})}
-                  placeholder="Short product description" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Room *</label>
-                <select value={form.room_id} onChange={e => setForm({...form, room_id: e.target.value})}
-                  style={inputStyle}>
-                  {ROOMS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Style</label>
-                <select value={form.style_tag} onChange={e => setForm({...form, style_tag: e.target.value})}
-                  style={inputStyle}>
-                  {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Price (₹) *</label>
-                <input type="number" value={form.price}
-                  onChange={e => setForm({...form, price: e.target.value})}
-                  placeholder="e.g. 850" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Unit</label>
-                <select value={form.unit} onChange={e => setForm({...form, unit: e.target.value})}
-                  style={inputStyle}>
-                  {["per piece", "per set", "per sqft", "per meter", "per kg", "per bucket"].map(u => (
-                    <option key={u} value={u}>{u}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Stock Quantity</label>
-                <input type="number" value={form.stock_qty}
-                  onChange={e => setForm({...form, stock_qty: e.target.value})}
-                  placeholder="e.g. 100" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Brand</label>
-                <input value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}
-                  placeholder="e.g. Jaquar" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Length (cm)</label>
-                <input type="number" value={form.length_cm}
-                  onChange={e => setForm({...form, length_cm: e.target.value})}
-                  placeholder="e.g. 60" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Width (cm)</label>
-                <input type="number" value={form.width_cm}
-                  onChange={e => setForm({...form, width_cm: e.target.value})}
-                  placeholder="e.g. 30" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Height (cm)</label>
-                <input type="number" value={form.height_cm}
-                  onChange={e => setForm({...form, height_cm: e.target.value})}
-                  placeholder="e.g. 180" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Material</label>
-                <input value={form.material} onChange={e => setForm({...form, material: e.target.value})}
-                  placeholder="e.g. Ceramic" style={inputStyle} />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Color</label>
-                <input value={form.color} onChange={e => setForm({...form, color: e.target.value})}
-                  placeholder="e.g. White" style={inputStyle} />
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Image URL</label>
-                <input value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})}
-                  placeholder="https://res.cloudinary.com/..." style={inputStyle} />
-              </div>
-
+          {sales.length===0&&(
+            <div style={{background:"white",borderRadius:12,padding:40,textAlign:"center",color:"#888"}}>
+              <div style={{fontSize:40}}>🎉</div>
+              <div style={{marginTop:8,fontWeight:500}}>No active sales</div>
+              <div style={{fontSize:13,marginTop:4}}>Create your first festival sale!</div>
             </div>
+          )}
 
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button onClick={saveProduct}
-                style={{ flex: 1, padding: 12, background: "#BA7517", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                {editProduct ? "💾 Save Changes" : "➕ Add Product"}
-              </button>
-              <button onClick={() => { setShowForm(false); setEditProduct(null); }}
-                style={{ flex: 1, padding: 12, background: "none", color: "#888", border: "1px solid #ddd", borderRadius: 8, fontSize: 14, cursor: "pointer" }}>
-                Cancel
-              </button>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {sales.map(sale=>(
+              <div key={sale.id} style={{borderRadius:14,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.1)"}}>
+                <div style={{background:sale.banner_color||"#BA7517",padding:16}}>
+                  <div style={{fontSize:28,marginBottom:6}}>{saleEmoji(sale.emoji)}</div>
+                  <div style={{color:"white",fontWeight:700,fontSize:15}}>{sale.name}</div>
+                  <div style={{color:"rgba(255,255,255,0.85)",fontSize:12,marginTop:4}}>{sale.description?.substring(0,60)}...</div>
+                  <div style={{background:"rgba(255,255,255,0.25)",borderRadius:8,padding:"4px 10px",display:"inline-block",color:"white",fontSize:13,fontWeight:700,marginTop:8}}>
+                    {sale.discount_pct}% OFF
+                  </div>
+                </div>
+                <div style={{background:"white",padding:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",marginBottom:8}}>
+                    <span>⏱️ {timeLeft(sale.end_date)}</span>
+                    <span>Ends: {new Date(sale.end_date).toLocaleDateString("en-IN")}</span>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>editSale(sale)} style={{flex:1,background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:6,padding:"6px 0",cursor:"pointer",fontSize:12,fontWeight:500}}>✏️ Edit</button>
+                    <button onClick={()=>deleteSale(sale.id)} style={{flex:1,background:"#FCEBEB",color:"#501313",border:"none",borderRadius:6,padding:"6px 0",cursor:"pointer",fontSize:12,fontWeight:500}}>🔴 End Sale</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ANALYTICS TAB ── */}
+      {tab==="analytics"&&analytics&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
+            {[{label:"Total Users",value:analytics.total_users,icon:"👥"},{label:"Active Today",value:analytics.active_today,icon:"🟢"},{label:"Avg Session",value:`${analytics.avg_session_duration}s`,icon:"⏱️"}].map((s,i)=>(
+              <div key={i} style={{background:"white",borderRadius:12,padding:16,textAlign:"center"}}>
+                <div style={{fontSize:24}}>{s.icon}</div>
+                <div style={{fontSize:22,fontWeight:700,color:"#BA7517",marginTop:4}}>{s.value}</div>
+                <div style={{fontSize:12,color:"#888",marginTop:2}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{background:"white",borderRadius:12,padding:16}}>
+              <div style={{fontWeight:600,marginBottom:12}}>🏠 Popular Rooms</div>
+              {analytics.popular_rooms?.slice(0,5).map((r,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0"}}>
+                  <span style={{fontSize:13}}>#{i+1} {r.room}</span>
+                  <span style={{background:"#FFF3DC",color:"#BA7517",borderRadius:10,padding:"2px 10px",fontSize:12,fontWeight:600}}>{r.views} views</span>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"white",borderRadius:12,padding:16}}>
+              <div style={{fontWeight:600,marginBottom:12}}>🛒 Cart Products</div>
+              {analytics.cart_products?.slice(0,5).map((p,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0"}}>
+                  <span style={{fontSize:13}}>#{i+1} {p.product?.substring(0,20)}</span>
+                  <span style={{background:"#E1F5EE",color:"#085041",borderRadius:10,padding:"2px 10px",fontSize:12,fontWeight:600}}>{p.add_count}x</span>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"white",borderRadius:12,padding:16}}>
+              <div style={{fontWeight:600,marginBottom:12}}>📄 Page Views</div>
+              {analytics.page_stats?.slice(0,5).map((p,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0",fontSize:13}}>
+                  <span>/{p.page}</span>
+                  <span style={{fontWeight:600}}>{p.views} views</span>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"white",borderRadius:12,padding:16}}>
+              <div style={{fontWeight:600,marginBottom:12}}>📅 Daily Orders (7 days)</div>
+              {analytics.daily_orders?.length===0&&<div style={{color:"#888",fontSize:13}}>No orders yet</div>}
+              {analytics.daily_orders?.map((d,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0",fontSize:13}}>
+                  <span>{d.date}</span>
+                  <span style={{fontWeight:600,color:"#BA7517"}}>₹{Number(d.revenue).toLocaleString("en-IN")} ({d.orders} orders)</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
