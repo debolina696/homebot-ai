@@ -147,10 +147,14 @@ export default function App() {
   const [selectedSale, setSelectedSale]       = useState(null);
   const [saleProducts, setSaleProducts]       = useState([]);
   const [saleLoading, setSaleLoading]         = useState(false);
-  // Day 25 — Wishlist
   const [wishlist, setWishlist]               = useState([]);
   const [wishlistIds, setWishlistIds]         = useState(new Set());
   const [wishlistLoading, setWishlistLoading] = useState(false);
+  // Day 26 — Compare
+  const [compareList, setCompareList]         = useState([]);
+  const [compareData, setCompareData]         = useState([]);
+  const [compareLoading, setCompareLoading]   = useState(false);
+  const [showCompareBar, setShowCompareBar]   = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -171,7 +175,6 @@ export default function App() {
     if (user&&screen==="profile")     { loadProfile(); loadStyleProfile(); }
     if (user&&screen==="wishlist")    loadWishlist();
     if (screen==="recommendations")   loadRecommendations();
-    if (screen==="sales")             loadSales();
     trackPage(screen);
   }, [screen, user]);
 
@@ -181,9 +184,9 @@ export default function App() {
     if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); }
   }, [selectedProduct]);
 
-  useEffect(() => {
-    if (user) loadWishlist();
-  }, [user]);
+  useEffect(() => { if (user) loadWishlist(); }, [user]);
+
+  useEffect(() => { setShowCompareBar(compareList.length > 0); }, [compareList]);
 
   const loadTopRated       = async () => { try { const r=await fetch(`${API}/api/top-rated`); const d=await r.json(); setTopRated(d.products||[]); } catch {} };
   const loadBundles        = async (id) => { try { const r=await fetch(`${API}/api/bundles/${id}`); const d=await r.json(); setBundles(d); } catch {} };
@@ -192,13 +195,10 @@ export default function App() {
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
 
   const loadWishlist = async () => {
-    if (!user) return;
-    setWishlistLoading(true);
+    if (!user) return; setWishlistLoading(true);
     try {
-      const r=await fetch(`${API}/api/wishlist/${user.id}`);
-      const d=await r.json();
-      setWishlist(d.wishlist||[]);
-      setWishlistIds(new Set((d.wishlist||[]).map(i=>i.id)));
+      const r=await fetch(`${API}/api/wishlist/${user.id}`); const d=await r.json();
+      setWishlist(d.wishlist||[]); setWishlistIds(new Set((d.wishlist||[]).map(i=>i.id)));
     } catch { setWishlist([]); }
     setWishlistLoading(false);
   };
@@ -216,12 +216,31 @@ export default function App() {
       try {
         const r=await fetch(`${API}/api/wishlist`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user.id,product_id:product.id})});
         const d=await r.json();
-        if (d.status==="ok"||d.status==="exists") {
-          setWishlistIds(prev=>new Set([...prev,product.id]));
-          setWishlist(prev=>[...prev,{...product}]);
-        }
+        if (d.status==="ok"||d.status==="exists") { setWishlistIds(prev=>new Set([...prev,product.id])); setWishlist(prev=>[...prev,{...product}]); }
       } catch(err) { alert("Failed: "+err.message); }
     }
+  };
+
+  const toggleCompare = (product) => {
+    const exists = compareList.find(p=>p.id===product.id);
+    if (exists) {
+      setCompareList(prev=>prev.filter(p=>p.id!==product.id));
+    } else {
+      if (compareList.length >= 2) { alert("You can compare maximum 2 products at a time!"); return; }
+      setCompareList(prev=>[...prev, product]);
+    }
+  };
+
+  const startCompare = async () => {
+    if (compareList.length < 2) { alert("Please select 2 products to compare!"); return; }
+    setCompareLoading(true);
+    try {
+      const r=await fetch(`${API}/api/compare`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_ids:compareList.map(p=>p.id)})});
+      const d=await r.json();
+      setCompareData(d.products||[]);
+      setScreen("compare");
+    } catch(err) { alert("Failed: "+err.message); }
+    setCompareLoading(false);
   };
 
   const loadSaleProducts = async (sale) => {
@@ -418,12 +437,17 @@ export default function App() {
   };
 
   const WishlistBtn = ({product}) => {
-    const isWishlisted = wishlistIds.has(product.id);
+    const isW = wishlistIds.has(product.id);
+    return <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4}} title={isW?"Remove from wishlist":"Add to wishlist"}>{isW?"❤️":"🤍"}</button>;
+  };
+
+  const CompareBtn = ({product}) => {
+    const isC = compareList.find(p=>p.id===product.id);
     return (
-      <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}}
-        style={{background:"none",border:"none",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}
-        title={isWishlisted?"Remove from wishlist":"Add to wishlist"}>
-        {isWishlisted ? "❤️" : "🤍"}
+      <button onClick={e=>{e.stopPropagation();toggleCompare(product);}}
+        style={{background:isC?"#E6F1FB":"#f0f0f0",border:isC?"1px solid #0C447C":"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:isC?"#0C447C":"#555",fontWeight:isC?600:400}}
+        title={isC?"Remove from compare":"Add to compare"}>
+        {isC?"✓ Compare":"⊕ Compare"}
       </button>
     );
   };
@@ -457,15 +481,16 @@ export default function App() {
           {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={14}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
           {(p.material||p.color)&&<div style={{fontSize:11,marginTop:4,display:"flex",gap:4,flexWrap:"wrap"}}>{p.material&&<span style={{background:"#EEEDFE",color:"#26215C",borderRadius:4,padding:"2px 6px"}}>🧱 {p.material}</span>}{p.color&&<span style={{background:"#E1F5EE",color:"#085041",borderRadius:4,padding:"2px 6px"}}>🎨 {p.color}</span>}</div>}
           <div style={{fontSize:11,color:"#666",marginTop:4}}>Brand: <strong>{p.brand}</strong>{p.room_name&&<span style={{color:"#BA7517"}}> | {p.room_name}</span>}</div>
-          <button onClick={e=>{e.stopPropagation();addToCart(salePrice?{...p,price:salePrice}:p);}}
-            style={{marginTop:8,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
-            + Add to Cart {salePrice&&"🔥"}
-          </button>
+          <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+            <button onClick={e=>{e.stopPropagation();addToCart(salePrice?{...p,price:salePrice}:p);}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add to Cart</button>
+            <CompareBtn product={p}/>
+          </div>
         </div>
       </div>
     );
   };
 
+  // ── LOGIN ──
   if (screen==="login") return (
     <div style={{fontFamily:"sans-serif",maxWidth:400,margin:"0 auto",padding:"40px 20px",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:56}}>🏠</div><div style={{fontSize:24,fontWeight:700,color:"#BA7517"}}>HomeBot AI</div><div style={{fontSize:13,color:"#888",marginTop:4}}>Interior Design Assistant</div></div>
@@ -494,6 +519,7 @@ export default function App() {
     </div>
   );
 
+  // ── ORDER TRACKING ──
   if (screen==="track"&&trackedOrder) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
@@ -534,6 +560,7 @@ export default function App() {
     </div>
   );
 
+  // ── SALE DETAIL ──
   if (screen==="sale_detail"&&selectedSale) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:selectedSale.banner_color||"#BA7517",padding:"16px 20px"}}>
@@ -545,7 +572,6 @@ export default function App() {
         <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,marginTop:4}}>{selectedSale.description}</div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 12px",color:"white",fontSize:13,fontWeight:600}}>Up to {selectedSale.discount_pct}% OFF</div>
-          <div style={{color:"rgba(255,255,255,0.85)",fontSize:12}}>Ends in:</div>
           <CountdownTimer endDate={selectedSale.end_date}/>
         </div>
       </div>
@@ -556,6 +582,91 @@ export default function App() {
     </div>
   );
 
+  // ── COMPARE PAGE ──
+  if (screen==="compare") return (
+    <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
+      <div style={{background:"#0C447C",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>setScreen("products")} style={{background:"none",border:"none",color:"white",fontSize:20,cursor:"pointer"}}>←</button>
+          <div style={{color:"white",fontWeight:600,fontSize:16}}>🆚 Compare Products</div>
+        </div>
+        <button onClick={()=>{setCompareList([]);setScreen("products");}} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:8,padding:"4px 10px",fontSize:12,cursor:"pointer"}}>Clear</button>
+      </div>
+
+      {compareLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading comparison...</div>}
+
+      {!compareLoading&&compareData.length>=2&&(
+        <div style={{padding:16,paddingBottom:80}}>
+
+          {/* Product Images & Names */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            {compareData.map((p,i)=>(
+              <div key={p.id} style={{background:"white",borderRadius:12,padding:12,textAlign:"center"}}>
+                {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:120,objectFit:"cover",borderRadius:8}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/200x120/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:120,background:"#FFF3DC",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🏠</div>}
+                <div style={{fontWeight:600,fontSize:13,marginTop:8,lineHeight:1.3}}>{p.name}</div>
+                <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                <button onClick={()=>addToCart(p)} style={{width:"100%",marginTop:8,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 0",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add to Cart</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Comparison Table */}
+          <div style={{background:"white",borderRadius:12,overflow:"hidden"}}>
+            <div style={{background:"#0C447C",padding:"10px 16px",color:"white",fontWeight:600,fontSize:14}}>📊 Side by Side Comparison</div>
+
+            {[
+              {label:"💰 Price",     key:"price",      format:(v)=>`₹${Number(v).toLocaleString("en-IN")}`},
+              {label:"🏷️ Brand",    key:"brand",      format:(v)=>v||"—"},
+              {label:"🧱 Material",  key:"material",   format:(v)=>v||"—"},
+              {label:"🎨 Color",     key:"color",      format:(v)=>v||"—"},
+              {label:"📐 Length",    key:"length_cm",  format:(v)=>v?`${v} cm`:"—"},
+              {label:"📐 Width",     key:"width_cm",   format:(v)=>v?`${v} cm`:"—"},
+              {label:"📐 Height",    key:"height_cm",  format:(v)=>v?`${v} cm`:"—"},
+              {label:"🏠 Room",      key:"room_name",  format:(v)=>v||"—"},
+              {label:"🎨 Style",     key:"style_tag",  format:(v)=>v||"—"},
+              {label:"📦 Stock",     key:"stock_qty",  format:(v)=>v?`${v} units`:"—"},
+              {label:"⭐ Rating",    key:"avg_rating", format:(v)=>Number(v)>0?`${Number(v).toFixed(1)} ★`:"No ratings"},
+              {label:"💬 Reviews",   key:"review_count",format:(v)=>`${v||0} reviews`},
+            ].map((row,i)=>{
+              const v0 = compareData[0]?.[row.key];
+              const v1 = compareData[1]?.[row.key];
+              const isBetter0 = row.key==="price" ? Number(v0)<Number(v1) : row.key==="avg_rating"||row.key==="review_count" ? Number(v0)>Number(v1) : false;
+              const isBetter1 = row.key==="price" ? Number(v1)<Number(v0) : row.key==="avg_rating"||row.key==="review_count" ? Number(v1)>Number(v0) : false;
+              return (
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",borderBottom:"0.5px solid #f0f0f0"}}>
+                  <div style={{padding:"10px 12px",background:"#f8f9fa",fontSize:12,fontWeight:600,color:"#555",display:"flex",alignItems:"center"}}>{row.label}</div>
+                  <div style={{padding:"10px 12px",fontSize:13,textAlign:"center",background:isBetter0?"#E1F5EE":"white",color:isBetter0?"#085041":"#333",fontWeight:isBetter0?600:400,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                    {row.format(v0)}{isBetter0&&<span style={{fontSize:10,color:"#085041"}}>✓Best</span>}
+                  </div>
+                  <div style={{padding:"10px 12px",fontSize:13,textAlign:"center",background:isBetter1?"#E1F5EE":"white",color:isBetter1?"#085041":"#333",fontWeight:isBetter1?600:400,display:"flex",alignItems:"center",justifyContent:"center",gap:4,borderLeft:"0.5px solid #f0f0f0"}}>
+                    {row.format(v1)}{isBetter1&&<span style={{fontSize:10,color:"#085041"}}>✓Best</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Winner Banner */}
+          {(() => {
+            const p0 = compareData[0]; const p1 = compareData[1];
+            const score0 = (Number(p0?.avg_rating)||0)*20 + (Number(p0?.review_count)||0)*2 - (Number(p0?.price)||0)/10000;
+            const score1 = (Number(p1?.avg_rating)||0)*20 + (Number(p1?.review_count)||0)*2 - (Number(p1?.price)||0)/10000;
+            const winner = score0>=score1 ? p0 : p1;
+            return (
+              <div style={{background:"#FFF3DC",borderRadius:12,padding:16,marginTop:16,textAlign:"center"}}>
+                <div style={{fontSize:24,marginBottom:8}}>🏆</div>
+                <div style={{fontWeight:700,fontSize:15,color:"#BA7517"}}>Our Recommendation</div>
+                <div style={{fontSize:14,color:"#555",marginTop:6}}><strong>{winner.name}</strong> is the better choice based on rating, reviews and value for money!</div>
+                <button onClick={()=>addToCart(winner)} style={{marginTop:12,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Add {winner.name} to Cart</button>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── PRODUCT DETAIL ──
   if (screen==="product_detail"&&selectedProduct) {
     const avg=productReviews?.summary?.avg_rating||0;
     const total=productReviews?.summary?.total_reviews||0;
@@ -572,8 +683,6 @@ export default function App() {
           </div>
         </div>
         <div style={{padding:16,paddingBottom:80}}>
-
-          {/* IMAGE GALLERY */}
           <div style={{background:"white",borderRadius:12,overflow:"hidden",marginBottom:12}}>
             <div style={{position:"relative",width:"100%",height:280,background:"#f8f9fa"}}>
               {productGallery.length>0?(<img src={productGallery[galleryIndex]?.image_url} alt={selectedProduct.name} style={{width:"100%",height:280,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/480x280/FFF3DC/BA7517?text=🏠";}}/>):selectedProduct.image_url?(<img src={selectedProduct.image_url} alt={selectedProduct.name} style={{width:"100%",height:280,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/480x280/FFF3DC/BA7517?text=🏠";}}/>):(<div style={{width:"100%",height:280,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:80}}>🏠</div>)}
@@ -584,7 +693,6 @@ export default function App() {
             {productGallery.length>1?(<div style={{display:"flex",gap:8,padding:12,overflowX:"auto"}}>{productGallery.map((img,i)=>(<img key={i} src={img.image_url} alt={`view ${i+1}`} onClick={()=>setGalleryIndex(i)} style={{width:60,height:60,borderRadius:6,objectFit:"cover",cursor:"pointer",flexShrink:0,border:i===galleryIndex?"2px solid #BA7517":"2px solid transparent",opacity:i===galleryIndex?1:0.7}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>))}<div onClick={()=>setShowGalleryUpload(true)} style={{width:60,height:60,borderRadius:6,border:"2px dashed #BA7517",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#BA7517",fontSize:24}}>+</div></div>):(<div style={{padding:"8px 12px",textAlign:"center"}}><button onClick={()=>setShowGalleryUpload(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px dashed #BA7517",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12}}>📷 Add More Photos</button></div>)}
           </div>
 
-          {/* PRODUCT INFO */}
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{fontWeight:700,fontSize:18,flex:1}}>{selectedProduct.name}</div>
@@ -598,15 +706,13 @@ export default function App() {
                 <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #f0f0f0",fontSize:13}}><span style={{color:"#888"}}>{spec.label}</span><span style={{fontWeight:500}}>{spec.value}</span></div>
               ))}
             </div>
-            <div style={{display:"flex",gap:8,marginTop:16}}>
+            <div style={{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}}>
               <button onClick={()=>addToCart(selectedProduct)} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>+ Add to Cart</button>
-              <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 18px",fontSize:20,cursor:"pointer"}}>
-                {wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}
-              </button>
+              <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 18px",fontSize:20,cursor:"pointer"}}>{wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}</button>
+              <button onClick={()=>toggleCompare(selectedProduct)} style={{background:compareList.find(p=>p.id===selectedProduct.id)?"#E6F1FB":"#f0f0f0",color:compareList.find(p=>p.id===selectedProduct.id)?"#0C447C":"#555",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>🆚 Compare</button>
             </div>
           </div>
 
-          {/* BUNDLE */}
           {bundles?.bundle_products?.length>0&&(
             <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
               <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>🛍️ Complete the Look</div>
@@ -623,7 +729,6 @@ export default function App() {
             </div>
           )}
 
-          {/* REVIEWS */}
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontWeight:600,fontSize:15}}>⭐ Customer Reviews</div>
@@ -673,7 +778,7 @@ export default function App() {
                 <button onClick={()=>{setShowGalleryUpload(false);setGalleryFile(null);}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>✕</button>
               </div>
               <input type="file" accept="image/*" onChange={e=>setGalleryFile(e.target.files[0])} style={{width:"100%",marginBottom:16,fontSize:13}}/>
-              {galleryFile&&<div style={{marginBottom:16,textAlign:"center"}}><img src={URL.createObjectURL(galleryFile)} alt="preview" style={{width:150,height:150,objectFit:"cover",borderRadius:8,border:"1px solid #eee"}}/><div style={{fontSize:12,color:"#888",marginTop:4}}>{galleryFile.name}</div></div>}
+              {galleryFile&&<div style={{marginBottom:16,textAlign:"center"}}><img src={URL.createObjectURL(galleryFile)} alt="preview" style={{width:150,height:150,objectFit:"cover",borderRadius:8,border:"1px solid #eee"}}/></div>}
               <button onClick={()=>uploadGalleryImage(selectedProduct.id)} disabled={galleryUploading||!galleryFile} style={{width:"100%",padding:12,background:galleryUploading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:galleryUploading?"not-allowed":"pointer"}}>{galleryUploading?"⏳ Uploading...":"📤 Add to Gallery"}</button>
             </div>
           </div>
@@ -707,6 +812,7 @@ export default function App() {
     );
   }
 
+  // ── MAIN APP ──
   return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
 
@@ -714,7 +820,7 @@ export default function App() {
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer",position:"relative"}} onClick={()=>setScreen("wishlist")}>
-            ❤️ {wishlistIds.size>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#FF4444",color:"white",borderRadius:"50%",width:16,height:16,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{wishlistIds.size}</span>}
+            ❤️{wishlistIds.size>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#FF4444",color:"white",borderRadius:"50%",width:16,height:16,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{wishlistIds.size}</span>}
           </div>
           <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 10px",fontSize:12,color:"white",cursor:"pointer"}} onClick={()=>{setUser(null);setScreen("login");setCart([]);track("logout");}}>Logout</div>
@@ -729,6 +835,25 @@ export default function App() {
         ))}
       </div>
 
+      {/* COMPARE FLOATING BAR */}
+      {showCompareBar&&(
+        <div style={{position:"fixed",bottom:70,left:"50%",transform:"translateX(-50%)",width:"90%",maxWidth:440,background:"#0C447C",borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:150,boxShadow:"0 4px 20px rgba(0,0,0,0.2)"}}>
+          <div>
+            <div style={{color:"white",fontWeight:600,fontSize:13}}>🆚 Compare ({compareList.length}/2)</div>
+            <div style={{color:"rgba(255,255,255,0.8)",fontSize:11,marginTop:2}}>{compareList.map(p=>p.name.substring(0,15)).join(" vs ")}</div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            {compareList.length===2&&(
+              <button onClick={startCompare} disabled={compareLoading}
+                style={{background:"white",color:"#0C447C",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                {compareLoading?"...":"Compare →"}
+              </button>
+            )}
+            <button onClick={()=>setCompareList([])} style={{background:"rgba(255,255,255,0.2)",color:"white",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:12}}>✕</button>
+          </div>
+        </div>
+      )}
+
       {uploadScreen&&(
         <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400,maxHeight:"80vh",overflowY:"auto"}}>
@@ -742,7 +867,7 @@ export default function App() {
             </select>
             <input type="file" accept="image/*" onChange={e=>setUploadFile(e.target.files[0])} style={{width:"100%",marginBottom:16,fontSize:13}}/>
             {uploadFile&&<div style={{marginBottom:16,textAlign:"center"}}><img src={URL.createObjectURL(uploadFile)} alt="preview" style={{width:120,height:120,objectFit:"cover",borderRadius:8}}/></div>}
-            {uploadSuccess&&<div style={{background:"#E1F5EE",borderRadius:8,padding:10,marginBottom:12,textAlign:"center"}}><img src={uploadSuccess} alt="uploaded" style={{width:80,height:80,objectFit:"cover",borderRadius:6}}/><div style={{fontSize:12,color:"#085041",marginTop:4}}>✅ Uploaded!</div></div>}
+            {uploadSuccess&&<div style={{background:"#E1F5EE",borderRadius:8,padding:10,marginBottom:12,textAlign:"center"}}><div style={{fontSize:12,color:"#085041",marginTop:4}}>✅ Uploaded!</div></div>}
             <button onClick={uploadImage} disabled={uploadLoading} style={{width:"100%",padding:12,background:uploadLoading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:uploadLoading?"not-allowed":"pointer"}}>{uploadLoading?"⏳ Uploading...":"📤 Upload Image"}</button>
           </div>
         </div>
@@ -851,7 +976,6 @@ export default function App() {
           </div>
         )}
 
-        {/* WISHLIST SCREEN */}
         {screen==="wishlist"&&(
           <div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
@@ -875,22 +999,19 @@ export default function App() {
                 <div style={{flex:1,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
                   <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
                   <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
-                  <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}<span style={{fontSize:11,color:"#888",fontWeight:400}}> / {p.unit}</span></div>
+                  <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
                   {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={12}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
                   <button onClick={()=>toggleWishlist(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22}}>❤️</button>
-                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ Cart</button>
+                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Cart</button>
                 </div>
               </div>
             ))}
             {wishlist.length>0&&(
               <div style={{background:"#FFF3DC",borderRadius:12,padding:14,textAlign:"center"}}>
                 <div style={{fontSize:13,color:"#BA7517",fontWeight:500,marginBottom:8}}>Add all wishlist items to cart?</div>
-                <button onClick={()=>{wishlist.forEach(p=>addToCart(p));alert(`✅ ${wishlist.length} items added to cart!`);setScreen("cart");}}
-                  style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>
-                  🛒 Add All to Cart
-                </button>
+                <button onClick={()=>{wishlist.forEach(p=>addToCart(p));alert(`✅ ${wishlist.length} items added to cart!`);setScreen("cart");}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>🛒 Add All to Cart</button>
               </div>
             )}
           </div>
@@ -1100,4 +1221,4 @@ export default function App() {
       </div>
     </div>
   );
-}
+} 

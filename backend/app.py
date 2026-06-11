@@ -1365,5 +1365,36 @@ def check_wishlist(user_id, product_id):
         return jsonify({"in_wishlist": exists})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    # ── COMPARE ROUTE ──
+
+@app.route("/api/compare", methods=["POST"])
+def compare_products():
+    try:
+        data        = request.get_json()
+        product_ids = data.get("product_ids", [])
+        if len(product_ids) < 2:
+            return jsonify({"error": "Need at least 2 products"}), 400
+
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               COALESCE(AVG(pr.rating), 0) as avg_rating,
+               COUNT(pr.id) as review_count
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN product_reviews pr ON pr.product_id = p.id
+               WHERE p.id = ANY(%s)
+               GROUP BY p.id, r.name""",
+            (product_ids,)
+        )
+        products = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"products": list(products)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)     
