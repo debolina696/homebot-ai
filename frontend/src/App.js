@@ -39,6 +39,14 @@ const StarRating = ({rating, onRate, size=20}) => (
   </div>
 );
 
+const LoadingSpinner = () => (
+  <div style={{textAlign:"center",padding:40}}>
+    <div style={{width:40,height:40,border:"4px solid #FFF3DC",borderTop:"4px solid #BA7517",borderRadius:"50%",margin:"0 auto",animation:"spin 1s linear infinite"}}/>
+    <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
+    <div style={{color:"#888",fontSize:13,marginTop:12}}>Loading...</div>
+  </div>
+);
+
 const CountdownTimer = ({endDate}) => {
   const [timeLeft, setTimeLeft] = useState({});
   useEffect(() => {
@@ -150,7 +158,6 @@ export default function App() {
   const [wishlist, setWishlist]               = useState([]);
   const [wishlistIds, setWishlistIds]         = useState(new Set());
   const [wishlistLoading, setWishlistLoading] = useState(false);
-  // Day 26 — Compare
   const [compareList, setCompareList]         = useState([]);
   const [compareData, setCompareData]         = useState([]);
   const [compareLoading, setCompareLoading]   = useState(false);
@@ -179,14 +186,11 @@ export default function App() {
   }, [screen, user]);
 
   useEffect(() => { if (uploadScreen) loadAllProducts(); }, [uploadScreen]);
-
   useEffect(() => {
     if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); }
   }, [selectedProduct]);
-
   useEffect(() => { if (user) loadWishlist(); }, [user]);
-
-  useEffect(() => { setShowCompareBar(compareList.length > 0); }, [compareList]);
+  useEffect(() => { setShowCompareBar(compareList.length>0); }, [compareList]);
 
   const loadTopRated       = async () => { try { const r=await fetch(`${API}/api/top-rated`); const d=await r.json(); setTopRated(d.products||[]); } catch {} };
   const loadBundles        = async (id) => { try { const r=await fetch(`${API}/api/bundles/${id}`); const d=await r.json(); setBundles(d); } catch {} };
@@ -204,9 +208,9 @@ export default function App() {
   };
 
   const toggleWishlist = async (product) => {
-    if (!user) { alert("Please login to use wishlist!"); return; }
-    const isInWishlist = wishlistIds.has(product.id);
-    if (isInWishlist) {
+    if (!user) { alert("Please login!"); return; }
+    const isIn = wishlistIds.has(product.id);
+    if (isIn) {
       try {
         await fetch(`${API}/api/wishlist/${user.id}/${product.id}`,{method:"DELETE"});
         setWishlistIds(prev=>{const n=new Set(prev);n.delete(product.id);return n;});
@@ -223,22 +227,19 @@ export default function App() {
 
   const toggleCompare = (product) => {
     const exists = compareList.find(p=>p.id===product.id);
-    if (exists) {
-      setCompareList(prev=>prev.filter(p=>p.id!==product.id));
-    } else {
-      if (compareList.length >= 2) { alert("You can compare maximum 2 products at a time!"); return; }
-      setCompareList(prev=>[...prev, product]);
+    if (exists) { setCompareList(prev=>prev.filter(p=>p.id!==product.id)); }
+    else {
+      if (compareList.length>=2) { alert("Maximum 2 products to compare!"); return; }
+      setCompareList(prev=>[...prev,product]);
     }
   };
 
   const startCompare = async () => {
-    if (compareList.length < 2) { alert("Please select 2 products to compare!"); return; }
+    if (compareList.length<2) { alert("Select 2 products!"); return; }
     setCompareLoading(true);
     try {
       const r=await fetch(`${API}/api/compare`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_ids:compareList.map(p=>p.id)})});
-      const d=await r.json();
-      setCompareData(d.products||[]);
-      setScreen("compare");
+      const d=await r.json(); setCompareData(d.products||[]); setScreen("compare");
     } catch(err) { alert("Failed: "+err.message); }
     setCompareLoading(false);
   };
@@ -289,7 +290,7 @@ export default function App() {
   };
 
   const uploadGalleryImage = async (productId) => {
-    if (!galleryFile) { alert("Select an image first!"); return; }
+    if (!galleryFile) { alert("Select an image!"); return; }
     setGalleryUploading(true);
     try {
       const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery");
@@ -326,19 +327,19 @@ export default function App() {
   };
 
   const uploadImage = async () => {
-    if (!uploadFile||!uploadProductId) { alert("Please select product and image!"); return; }
+    if (!uploadFile||!uploadProductId) { alert("Select product and image!"); return; }
     setUploadLoading(true);
     try {
       const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId);
       const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json();
-      if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Image uploaded!"); } else alert("Error: "+d.error);
+      if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Uploaded!"); } else alert("Error: "+d.error);
     } catch(err) { alert("Upload failed: "+err.message); }
     setUploadLoading(false);
   };
 
   const trackOrderFn = async (orderId) => {
     setTrackLoading(true);
-    try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track order"); }
+    try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track"); }
     setTrackLoading(false);
   };
 
@@ -346,8 +347,8 @@ export default function App() {
     try {
       const r=await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})});
       const d=await r.json();
-      if (d.status==="ok") { alert("✅ Profile updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); }
-    } catch(err) { alert("Update failed: "+err.message); }
+      if (d.status==="ok") { alert("✅ Updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); }
+    } catch(err) { alert("Failed: "+err.message); }
   };
 
   const placeOrder = async () => {
@@ -357,7 +358,7 @@ export default function App() {
       const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home"})});
       const d=await r.json();
       if (d.status==="ok") { setOrderSuccess(d); setCart([]); track("place_order",null,null,`Order #${d.order_id}`); } else alert("Order failed: "+d.error);
-    } catch(err) { alert("Order failed: "+err.message); }
+    } catch(err) { alert("Failed: "+err.message); }
     setOrderPlacing(false);
   };
 
@@ -438,15 +439,14 @@ export default function App() {
 
   const WishlistBtn = ({product}) => {
     const isW = wishlistIds.has(product.id);
-    return <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4}} title={isW?"Remove from wishlist":"Add to wishlist"}>{isW?"❤️":"🤍"}</button>;
+    return <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4}}>{isW?"❤️":"🤍"}</button>;
   };
 
   const CompareBtn = ({product}) => {
     const isC = compareList.find(p=>p.id===product.id);
     return (
       <button onClick={e=>{e.stopPropagation();toggleCompare(product);}}
-        style={{background:isC?"#E6F1FB":"#f0f0f0",border:isC?"1px solid #0C447C":"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:isC?"#0C447C":"#555",fontWeight:isC?600:400}}
-        title={isC?"Remove from compare":"Add to compare"}>
+        style={{background:isC?"#E6F1FB":"#f0f0f0",border:isC?"1px solid #0C447C":"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:isC?"#0C447C":"#555",fontWeight:isC?600:400}}>
         {isC?"✓ Compare":"⊕ Compare"}
       </button>
     );
@@ -490,7 +490,6 @@ export default function App() {
     );
   };
 
-  // ── LOGIN ──
   if (screen==="login") return (
     <div style={{fontFamily:"sans-serif",maxWidth:400,margin:"0 auto",padding:"40px 20px",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{textAlign:"center",marginBottom:32}}><div style={{fontSize:56}}>🏠</div><div style={{fontSize:24,fontWeight:700,color:"#BA7517"}}>HomeBot AI</div><div style={{fontSize:13,color:"#888",marginTop:4}}>Interior Design Assistant</div></div>
@@ -519,7 +518,6 @@ export default function App() {
     </div>
   );
 
-  // ── ORDER TRACKING ──
   if (screen==="track"&&trackedOrder) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
@@ -560,7 +558,6 @@ export default function App() {
     </div>
   );
 
-  // ── SALE DETAIL ──
   if (screen==="sale_detail"&&selectedSale) return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:selectedSale.banner_color||"#BA7517",padding:"16px 20px"}}>
@@ -576,13 +573,11 @@ export default function App() {
         </div>
       </div>
       <div style={{padding:16,paddingBottom:80}}>
-        {saleLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
-        {!saleLoading&&saleProducts.map(p=><ProductCard key={p.id} p={p} saleDiscount={p.discount_pct||selectedSale.discount_pct}/>)}
+        {saleLoading?<LoadingSpinner/>:saleProducts.map(p=><ProductCard key={p.id} p={p} saleDiscount={p.discount_pct||selectedSale.discount_pct}/>)}
       </div>
     </div>
   );
 
-  // ── COMPARE PAGE ──
   if (screen==="compare") return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <div style={{background:"#0C447C",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -592,13 +587,8 @@ export default function App() {
         </div>
         <button onClick={()=>{setCompareList([]);setScreen("products");}} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:8,padding:"4px 10px",fontSize:12,cursor:"pointer"}}>Clear</button>
       </div>
-
-      {compareLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading comparison...</div>}
-
-      {!compareLoading&&compareData.length>=2&&(
+      {compareLoading?<LoadingSpinner/>:compareData.length>=2&&(
         <div style={{padding:16,paddingBottom:80}}>
-
-          {/* Product Images & Names */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
             {compareData.map((p,i)=>(
               <div key={p.id} style={{background:"white",borderRadius:12,padding:12,textAlign:"center"}}>
@@ -609,55 +599,44 @@ export default function App() {
               </div>
             ))}
           </div>
-
-          {/* Comparison Table */}
           <div style={{background:"white",borderRadius:12,overflow:"hidden"}}>
             <div style={{background:"#0C447C",padding:"10px 16px",color:"white",fontWeight:600,fontSize:14}}>📊 Side by Side Comparison</div>
-
             {[
-              {label:"💰 Price",     key:"price",      format:(v)=>`₹${Number(v).toLocaleString("en-IN")}`},
-              {label:"🏷️ Brand",    key:"brand",      format:(v)=>v||"—"},
-              {label:"🧱 Material",  key:"material",   format:(v)=>v||"—"},
-              {label:"🎨 Color",     key:"color",      format:(v)=>v||"—"},
-              {label:"📐 Length",    key:"length_cm",  format:(v)=>v?`${v} cm`:"—"},
-              {label:"📐 Width",     key:"width_cm",   format:(v)=>v?`${v} cm`:"—"},
-              {label:"📐 Height",    key:"height_cm",  format:(v)=>v?`${v} cm`:"—"},
-              {label:"🏠 Room",      key:"room_name",  format:(v)=>v||"—"},
-              {label:"🎨 Style",     key:"style_tag",  format:(v)=>v||"—"},
-              {label:"📦 Stock",     key:"stock_qty",  format:(v)=>v?`${v} units`:"—"},
-              {label:"⭐ Rating",    key:"avg_rating", format:(v)=>Number(v)>0?`${Number(v).toFixed(1)} ★`:"No ratings"},
-              {label:"💬 Reviews",   key:"review_count",format:(v)=>`${v||0} reviews`},
+              {label:"💰 Price",     key:"price",      fmt:(v)=>`₹${Number(v).toLocaleString("en-IN")}`},
+              {label:"🏷️ Brand",    key:"brand",      fmt:(v)=>v||"—"},
+              {label:"🧱 Material",  key:"material",   fmt:(v)=>v||"—"},
+              {label:"🎨 Color",     key:"color",      fmt:(v)=>v||"—"},
+              {label:"📐 Length",    key:"length_cm",  fmt:(v)=>v?`${v} cm`:"—"},
+              {label:"📐 Width",     key:"width_cm",   fmt:(v)=>v?`${v} cm`:"—"},
+              {label:"🏠 Room",      key:"room_name",  fmt:(v)=>v||"—"},
+              {label:"🎨 Style",     key:"style_tag",  fmt:(v)=>v||"—"},
+              {label:"📦 Stock",     key:"stock_qty",  fmt:(v)=>v?`${v} units`:"—"},
+              {label:"⭐ Rating",    key:"avg_rating", fmt:(v)=>Number(v)>0?`${Number(v).toFixed(1)} ★`:"No ratings"},
+              {label:"💬 Reviews",   key:"review_count",fmt:(v)=>`${v||0} reviews`},
             ].map((row,i)=>{
-              const v0 = compareData[0]?.[row.key];
-              const v1 = compareData[1]?.[row.key];
-              const isBetter0 = row.key==="price" ? Number(v0)<Number(v1) : row.key==="avg_rating"||row.key==="review_count" ? Number(v0)>Number(v1) : false;
-              const isBetter1 = row.key==="price" ? Number(v1)<Number(v0) : row.key==="avg_rating"||row.key==="review_count" ? Number(v1)>Number(v0) : false;
+              const v0=compareData[0]?.[row.key]; const v1=compareData[1]?.[row.key];
+              const b0=row.key==="price"?Number(v0)<Number(v1):row.key==="avg_rating"||row.key==="review_count"?Number(v0)>Number(v1):false;
+              const b1=row.key==="price"?Number(v1)<Number(v0):row.key==="avg_rating"||row.key==="review_count"?Number(v1)>Number(v0):false;
               return (
                 <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",borderBottom:"0.5px solid #f0f0f0"}}>
                   <div style={{padding:"10px 12px",background:"#f8f9fa",fontSize:12,fontWeight:600,color:"#555",display:"flex",alignItems:"center"}}>{row.label}</div>
-                  <div style={{padding:"10px 12px",fontSize:13,textAlign:"center",background:isBetter0?"#E1F5EE":"white",color:isBetter0?"#085041":"#333",fontWeight:isBetter0?600:400,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                    {row.format(v0)}{isBetter0&&<span style={{fontSize:10,color:"#085041"}}>✓Best</span>}
-                  </div>
-                  <div style={{padding:"10px 12px",fontSize:13,textAlign:"center",background:isBetter1?"#E1F5EE":"white",color:isBetter1?"#085041":"#333",fontWeight:isBetter1?600:400,display:"flex",alignItems:"center",justifyContent:"center",gap:4,borderLeft:"0.5px solid #f0f0f0"}}>
-                    {row.format(v1)}{isBetter1&&<span style={{fontSize:10,color:"#085041"}}>✓Best</span>}
-                  </div>
+                  <div style={{padding:"10px 12px",fontSize:13,textAlign:"center",background:b0?"#E1F5EE":"white",color:b0?"#085041":"#333",fontWeight:b0?600:400,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>{row.fmt(v0)}{b0&&<span style={{fontSize:10}}>✓</span>}</div>
+                  <div style={{padding:"10px 12px",fontSize:13,textAlign:"center",background:b1?"#E1F5EE":"white",color:b1?"#085041":"#333",fontWeight:b1?600:400,display:"flex",alignItems:"center",justifyContent:"center",gap:4,borderLeft:"0.5px solid #f0f0f0"}}>{row.fmt(v1)}{b1&&<span style={{fontSize:10}}>✓</span>}</div>
                 </div>
               );
             })}
           </div>
-
-          {/* Winner Banner */}
-          {(() => {
-            const p0 = compareData[0]; const p1 = compareData[1];
-            const score0 = (Number(p0?.avg_rating)||0)*20 + (Number(p0?.review_count)||0)*2 - (Number(p0?.price)||0)/10000;
-            const score1 = (Number(p1?.avg_rating)||0)*20 + (Number(p1?.review_count)||0)*2 - (Number(p1?.price)||0)/10000;
-            const winner = score0>=score1 ? p0 : p1;
+          {(()=>{
+            const p0=compareData[0]; const p1=compareData[1];
+            const s0=(Number(p0?.avg_rating)||0)*20+(Number(p0?.review_count)||0)*2-(Number(p0?.price)||0)/10000;
+            const s1=(Number(p1?.avg_rating)||0)*20+(Number(p1?.review_count)||0)*2-(Number(p1?.price)||0)/10000;
+            const winner=s0>=s1?p0:p1;
             return (
               <div style={{background:"#FFF3DC",borderRadius:12,padding:16,marginTop:16,textAlign:"center"}}>
                 <div style={{fontSize:24,marginBottom:8}}>🏆</div>
                 <div style={{fontWeight:700,fontSize:15,color:"#BA7517"}}>Our Recommendation</div>
-                <div style={{fontSize:14,color:"#555",marginTop:6}}><strong>{winner.name}</strong> is the better choice based on rating, reviews and value for money!</div>
-                <button onClick={()=>addToCart(winner)} style={{marginTop:12,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Add {winner.name} to Cart</button>
+                <div style={{fontSize:14,color:"#555",marginTop:6}}><strong>{winner.name}</strong> is the better choice!</div>
+                <button onClick={()=>addToCart(winner)} style={{marginTop:12,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Add to Cart</button>
               </div>
             );
           })()}
@@ -666,7 +645,6 @@ export default function App() {
     </div>
   );
 
-  // ── PRODUCT DETAIL ──
   if (screen==="product_detail"&&selectedProduct) {
     const avg=productReviews?.summary?.avg_rating||0;
     const total=productReviews?.summary?.total_reviews||0;
@@ -692,7 +670,6 @@ export default function App() {
             </div>
             {productGallery.length>1?(<div style={{display:"flex",gap:8,padding:12,overflowX:"auto"}}>{productGallery.map((img,i)=>(<img key={i} src={img.image_url} alt={`view ${i+1}`} onClick={()=>setGalleryIndex(i)} style={{width:60,height:60,borderRadius:6,objectFit:"cover",cursor:"pointer",flexShrink:0,border:i===galleryIndex?"2px solid #BA7517":"2px solid transparent",opacity:i===galleryIndex?1:0.7}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>))}<div onClick={()=>setShowGalleryUpload(true)} style={{width:60,height:60,borderRadius:6,border:"2px dashed #BA7517",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#BA7517",fontSize:24}}>+</div></div>):(<div style={{padding:"8px 12px",textAlign:"center"}}><button onClick={()=>setShowGalleryUpload(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px dashed #BA7517",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12}}>📷 Add More Photos</button></div>)}
           </div>
-
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{fontWeight:700,fontSize:18,flex:1}}>{selectedProduct.name}</div>
@@ -709,10 +686,9 @@ export default function App() {
             <div style={{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}}>
               <button onClick={()=>addToCart(selectedProduct)} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>+ Add to Cart</button>
               <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 18px",fontSize:20,cursor:"pointer"}}>{wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}</button>
-              <button onClick={()=>toggleCompare(selectedProduct)} style={{background:compareList.find(p=>p.id===selectedProduct.id)?"#E6F1FB":"#f0f0f0",color:compareList.find(p=>p.id===selectedProduct.id)?"#0C447C":"#555",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>🆚 Compare</button>
+              <button onClick={()=>toggleCompare(selectedProduct)} style={{background:compareList.find(p=>p.id===selectedProduct.id)?"#E6F1FB":"#f0f0f0",color:compareList.find(p=>p.id===selectedProduct.id)?"#0C447C":"#555",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>🆚</button>
             </div>
           </div>
-
           {bundles?.bundle_products?.length>0&&(
             <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
               <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>🛍️ Complete the Look</div>
@@ -728,7 +704,6 @@ export default function App() {
               </div>
             </div>
           )}
-
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontWeight:600,fontSize:15}}>⭐ Customer Reviews</div>
@@ -769,7 +744,6 @@ export default function App() {
             ))}
           </div>
         </div>
-
         {showGalleryUpload&&(
           <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400}}>
@@ -783,7 +757,6 @@ export default function App() {
             </div>
           </div>
         )}
-
         {showReviewForm&&(
           <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:420,maxHeight:"90vh",overflowY:"auto"}}>
@@ -812,10 +785,8 @@ export default function App() {
     );
   }
 
-  // ── MAIN APP ──
   return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
-
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -835,7 +806,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* COMPARE FLOATING BAR */}
       {showCompareBar&&(
         <div style={{position:"fixed",bottom:70,left:"50%",transform:"translateX(-50%)",width:"90%",maxWidth:440,background:"#0C447C",borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:150,boxShadow:"0 4px 20px rgba(0,0,0,0.2)"}}>
           <div>
@@ -843,12 +813,7 @@ export default function App() {
             <div style={{color:"rgba(255,255,255,0.8)",fontSize:11,marginTop:2}}>{compareList.map(p=>p.name.substring(0,15)).join(" vs ")}</div>
           </div>
           <div style={{display:"flex",gap:8}}>
-            {compareList.length===2&&(
-              <button onClick={startCompare} disabled={compareLoading}
-                style={{background:"white",color:"#0C447C",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>
-                {compareLoading?"...":"Compare →"}
-              </button>
-            )}
+            {compareList.length===2&&<button onClick={startCompare} disabled={compareLoading} style={{background:"white",color:"#0C447C",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>{compareLoading?"...":"Compare →"}</button>}
             <button onClick={()=>setCompareList([])} style={{background:"rgba(255,255,255,0.2)",color:"white",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:12}}>✕</button>
           </div>
         </div>
@@ -982,37 +947,37 @@ export default function App() {
               <div style={{fontSize:16,fontWeight:600}}>❤️ My Wishlist ({wishlist.length})</div>
               <button onClick={()=>setScreen("home")} style={{fontSize:12,color:"#BA7517",background:"none",border:"none",cursor:"pointer"}}>← Back</button>
             </div>
-            {wishlistLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
-            {!wishlistLoading&&wishlist.length===0&&(
+            {wishlistLoading?<LoadingSpinner/>:wishlist.length===0?(
               <div style={{textAlign:"center",padding:40,color:"#888"}}>
                 <div style={{fontSize:48}}>🤍</div>
                 <div style={{marginTop:12,fontWeight:500,fontSize:15}}>Your wishlist is empty!</div>
                 <div style={{fontSize:13,marginTop:6,color:"#aaa"}}>Tap 🤍 on any product to save it</div>
                 <button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button>
               </div>
-            )}
-            {wishlist.map(p=>(
-              <div key={p.id} style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12}}>
-                <div style={{flexShrink:0,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
-                  {p.image_url?<img src={p.image_url} alt={p.name} style={{width:80,height:80,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/80x80/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:80,height:80,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>🏠</div>}
+            ):(
+              <>
+                {wishlist.map(p=>(
+                  <div key={p.id} style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12}}>
+                    <div style={{flexShrink:0,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                      {p.image_url?<img src={p.image_url} alt={p.name} style={{width:80,height:80,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/80x80/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:80,height:80,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>🏠</div>}
+                    </div>
+                    <div style={{flex:1,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                      <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
+                      <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
+                      <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                      {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={12}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+                      <button onClick={()=>toggleWishlist(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22}}>❤️</button>
+                      <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Cart</button>
+                    </div>
+                  </div>
+                ))}
+                <div style={{background:"#FFF3DC",borderRadius:12,padding:14,textAlign:"center"}}>
+                  <div style={{fontSize:13,color:"#BA7517",fontWeight:500,marginBottom:8}}>Add all wishlist items to cart?</div>
+                  <button onClick={()=>{wishlist.forEach(p=>addToCart(p));alert(`✅ ${wishlist.length} items added!`);setScreen("cart");}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>🛒 Add All to Cart</button>
                 </div>
-                <div style={{flex:1,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
-                  <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
-                  <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
-                  <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                  {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={12}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
-                  <button onClick={()=>toggleWishlist(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22}}>❤️</button>
-                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Cart</button>
-                </div>
-              </div>
-            ))}
-            {wishlist.length>0&&(
-              <div style={{background:"#FFF3DC",borderRadius:12,padding:14,textAlign:"center"}}>
-                <div style={{fontSize:13,color:"#BA7517",fontWeight:500,marginBottom:8}}>Add all wishlist items to cart?</div>
-                <button onClick={()=>{wishlist.forEach(p=>addToCart(p));alert(`✅ ${wishlist.length} items added to cart!`);setScreen("cart");}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>🛒 Add All to Cart</button>
-              </div>
+              </>
             )}
           </div>
         )}
@@ -1023,8 +988,8 @@ export default function App() {
               <div style={{fontSize:16,fontWeight:600}}>{selectedRoom?`${selectedRoom.icon} ${selectedRoom.name}`:"Select a room first"}</div>
               <button onClick={()=>setScreen("home")} style={{fontSize:12,color:"#BA7517",background:"none",border:"none",cursor:"pointer"}}>← Back</button>
             </div>
-            {products.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
-            {products.map(p=><ProductCard key={p.id} p={p}/>)}
+            {products.length===0?<LoadingSpinner/>:products.map(p=><ProductCard key={p.id} p={p}/>)}
+            {products.length>0&&<div style={{textAlign:"center",padding:16,color:"#888",fontSize:12}}>Showing {products.length} products in {selectedRoom?.name}</div>}
           </div>
         )}
 
@@ -1055,10 +1020,7 @@ export default function App() {
                 <button onClick={handleSearch} style={{width:"100%",marginTop:12,padding:10,background:"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer"}}>Apply Filters</button>
               </div>
             )}
-            {searching&&<div style={{textAlign:"center",padding:30,color:"#888"}}>🔍 Searching...</div>}
-            {!searching&&searchResults.length>0&&<div><div style={{fontSize:13,color:"#888",marginBottom:12}}>Found <strong>{searchResults.length}</strong> products</div>{searchResults.map(p=><ProductCard key={p.id} p={p}/>)}</div>}
-            {!searching&&searchResults.length===0&&!searchQuery&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>Search across all rooms</div></div>}
-            {!searching&&searchResults.length===0&&searchQuery&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>No results for "{searchQuery}"</div></div>}
+            {searching?<LoadingSpinner/>:searchResults.length>0?(<div><div style={{fontSize:13,color:"#888",marginBottom:12}}>Found <strong>{searchResults.length}</strong> products</div>{searchResults.map(p=><ProductCard key={p.id} p={p}/>)}</div>):!searchQuery?(<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>Search across all rooms</div></div>):(<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:32}}>🔍</div><div style={{marginTop:8}}>No results for "{searchQuery}"</div></div>)}
           </div>
         )}
 
@@ -1095,33 +1057,34 @@ export default function App() {
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>✨ Recommended For You</div>
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Based on your browsing history</div>
-            {recLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
-            {!recLoading&&trending.length>0&&(
-              <div style={{marginBottom:20}}>
-                <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>🔥 Trending This Week</div>
-                <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
-                  {trending.map(p=>(
-                    <div key={p.id} style={{flexShrink:0,width:150,background:"white",borderRadius:10,padding:12,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
-                      {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:100,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/150x100/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:100,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
-                      <div style={{fontWeight:500,fontSize:12,marginTop:6}}>{p.name}</div>
-                      <div style={{color:"#BA7517",fontWeight:600,fontSize:13,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                      <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{width:"100%",marginTop:6,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"4px 0",cursor:"pointer",fontSize:11}}>+ Add</button>
+            {recLoading?<LoadingSpinner/>:(
+              <>
+                {trending.length>0&&(
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>🔥 Trending This Week</div>
+                    <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
+                      {trending.map(p=>(
+                        <div key={p.id} style={{flexShrink:0,width:150,background:"white",borderRadius:10,padding:12,cursor:"pointer"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                          {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:100,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/150x100/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:100,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
+                          <div style={{fontWeight:500,fontSize:12,marginTop:6}}>{p.name}</div>
+                          <div style={{color:"#BA7517",fontWeight:600,fontSize:13,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                          <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{width:"100%",marginTop:6,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"4px 0",cursor:"pointer",fontSize:11}}>+ Add</button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                )}
+                {recommendations.length>0&&<div><div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#0C447C"}}>💡 Based on Your Interests</div>{recommendations.map((p,i)=><ProductCard key={`${p.id}-${i}`} p={p}/>)}</div>}
+                {recommendations.length===0&&trending.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:40}}>✨</div><div style={{marginTop:8,fontWeight:500}}>No recommendations yet!</div><button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button></div>}
+              </>
             )}
-            {!recLoading&&recommendations.length>0&&<div><div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#0C447C"}}>💡 Based on Your Interests</div>{recommendations.map((p,i)=><ProductCard key={`${p.id}-${i}`} p={p}/>)}</div>}
-            {!recLoading&&recommendations.length===0&&trending.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:40}}>✨</div><div style={{marginTop:8,fontWeight:500}}>No recommendations yet!</div><button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button></div>}
           </div>
         )}
 
         {screen==="orders"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>📦 My Orders</div>
-            {ordersLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
-            {!ordersLoading&&orders.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:40}}>📦</div><div style={{marginTop:8}}>No orders yet</div></div>}
-            {orders.map(order=>{
+            {ordersLoading?<LoadingSpinner/>:orders.length===0?(<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:40}}>📦</div><div style={{marginTop:8}}>No orders yet</div></div>):orders.map(order=>{
               const ss=STATUS_COLORS[order.status]||STATUS_COLORS.pending;
               return(
                 <div key={order.id} style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
@@ -1143,8 +1106,7 @@ export default function App() {
         {screen==="profile"&&(
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:16}}>👤 My Profile</div>
-            {profileLoading&&<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading...</div>}
-            {profile&&!editProfile&&(
+            {profileLoading?<LoadingSpinner/>:profile&&!editProfile?(
               <div>
                 <div style={{background:"white",borderRadius:12,padding:20,marginBottom:12,textAlign:"center"}}>
                   <div style={{width:64,height:64,borderRadius:"50%",background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto"}}>👤</div>
@@ -1170,8 +1132,7 @@ export default function App() {
                   ))}
                 </div>
               </div>
-            )}
-            {profile&&editProfile&&(
+            ):profile&&editProfile?(
               <div style={{background:"white",borderRadius:12,padding:20}}>
                 <div style={{fontWeight:600,marginBottom:16}}>✏️ Edit Profile</div>
                 <div style={{fontSize:12,color:"#888",marginBottom:4}}>Full Name</div><input value={editName} onChange={e=>setEditName(e.target.value)} style={S.input}/>
@@ -1182,7 +1143,7 @@ export default function App() {
                 <button onClick={saveProfile} style={{width:"100%",padding:12,background:"#BA7517",color:"white",border:"none",borderRadius:8,fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:10}}>Save Changes</button>
                 <button onClick={()=>setEditProfile(false)} style={{width:"100%",padding:10,background:"none",color:"#888",border:"1px solid #ddd",borderRadius:8,fontSize:14,cursor:"pointer"}}>Cancel</button>
               </div>
-            )}
+            ):null}
           </div>
         )}
 
@@ -1221,4 +1182,4 @@ export default function App() {
       </div>
     </div>
   );
-} 
+}

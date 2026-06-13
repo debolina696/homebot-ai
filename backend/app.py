@@ -1396,5 +1396,42 @@ def compare_products():
         return jsonify({"products": list(products)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    # ── HEALTH CHECK WITH STATS ──
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM products")
+        product_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM orders")
+        order_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM product_reviews")
+        review_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM wishlist")
+        wishlist_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM festival_sales WHERE is_active=TRUE")
+        sale_count = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "status":        "ok",
+            "version":       "2.0",
+            "products":      product_count,
+            "users":         user_count,
+            "orders":        order_count,
+            "reviews":       review_count,
+            "wishlists":     wishlist_count,
+            "active_sales":  sale_count,
+            "features": [
+                "AI Chat", "Reviews", "Wishlist",
+                "Compare", "Festival Sales", "Image Gallery",
+                "Personalization", "Recommendations"
+            ]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)     
