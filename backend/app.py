@@ -1433,5 +1433,346 @@ def health_check():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── POWER BI EXPORT ROUTES ──
+
+@app.route("/api/powerbi/overview", methods=["GET"])
+def powerbi_overview():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Total stats
+        cursor.execute("SELECT COUNT(*) as total FROM products")
+        total_products = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) as total FROM users")
+        total_users = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) as total FROM orders")
+        total_orders = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COALESCE(SUM(grand_total),0) as total FROM orders")
+        total_revenue = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) as total FROM product_reviews")
+        total_reviews = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COALESCE(AVG(rating),0) as avg FROM product_reviews")
+        avg_rating = cursor.fetchone()["avg"]
+
+        cursor.execute("SELECT COUNT(*) as total FROM wishlist")
+        total_wishlists = cursor.fetchone()["total"]
+
+        cursor.execute("SELECT COUNT(*) as total FROM festival_sales WHERE is_active=TRUE")
+        active_sales = cursor.fetchone()["total"]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_products":  total_products,
+            "total_users":     total_users,
+            "total_orders":    total_orders,
+            "total_revenue":   float(total_revenue),
+            "total_reviews":   total_reviews,
+            "avg_rating":      float(avg_rating),
+            "total_wishlists": total_wishlists,
+            "active_sales":    active_sales
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/powerbi/sales-data", methods=["GET"])
+def powerbi_sales_data():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Daily revenue last 30 days
+        cursor.execute(
+            """SELECT DATE(created_at) as date,
+               COUNT(*) as orders,
+               SUM(grand_total) as revenue,
+               AVG(grand_total) as avg_order
+               FROM orders
+               WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+               GROUP BY DATE(created_at)
+               ORDER BY date"""
+        )
+        daily = cursor.fetchall()
+
+        # Revenue by room
+        cursor.execute(
+            """SELECT r.name as room,
+               COUNT(DISTINCT o.id) as orders,
+               COALESCE(SUM(o.grand_total),0) as revenue
+               FROM rooms r
+               LEFT JOIN products p ON p.room_id = r.id
+               LEFT JOIN order_items oi ON oi.product_id = p.id
+               LEFT JOIN orders o ON o.id = oi.order_id
+               GROUP BY r.name
+               ORDER BY revenue DESC"""
+        )
+        by_room = cursor.fetchall()
+
+        # Orders by status
+        cursor.execute(
+            "SELECT status, COUNT(*) as count FROM orders GROUP BY status"
+        )
+        by_status = cursor.fetchall()
+
+        # Top selling products
+        cursor.execute(
+            """SELECT p.name, p.brand, r.name as room,
+               SUM(oi.quantity) as total_sold,
+               SUM(oi.quantity * oi.price) as revenue
+               FROM order_items oi
+               JOIN products p ON oi.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               GROUP BY p.name, p.brand, r.name
+               ORDER BY total_sold DESC
+               LIMIT 10"""
+        )
+        top_products = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        result_daily = []
+        for d in daily:
+            row = dict(d)
+            row["date"]      = str(d["date"])
+            row["revenue"]   = float(d["revenue"] or 0)
+            row["avg_order"] = float(d["avg_order"] or 0)
+            result_daily.append(row)
+
+        return jsonify({
+            "daily_revenue":  result_daily,
+            "by_room":        [{**dict(r),"revenue":float(r["revenue"])} for r in by_room],
+            "by_status":      list(by_status),
+            "top_products":   list(top_products)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/powerbi/user-data", methods=["GET"])
+def powerbi_user_data():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Users by city
+        cursor.execute(
+            """SELECT city, COUNT(*) as count
+               FROM users
+               WHERE city IS NOT NULL AND city != ''
+               GROUP BY city
+               ORDER BY count DESC"""
+        )
+        by_city = cursor.fetchall()
+
+        # Users by language
+        cursor.execute(
+            "SELECT language, COUNT(*) as count FROM users GROUP BY language ORDER BY count DESC"
+        )
+        by_language = cursor.fetchall()
+
+        # User activity summary
+        cursor.execute(
+            """SELECT action, COUNT(*) as count
+               FROM user_activity
+               GROUP BY action
+               ORDER BY count DESC"""
+        )
+        activity = cursor.fetchall()
+
+        # Page views
+        cursor.execute(
+            """SELECT page, COUNT(*) as views
+               FROM page_views
+               GROUP BY page
+               ORDER BY views DESC"""
+        )
+        page_views = cursor.fetchall()
+
+        # New users per day last 30 days
+        cursor.execute(
+            """SELECT DATE(created_at) as date, COUNT(*) as new_users
+               FROM users
+               WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+               GROUP BY DATE(created_at)
+               ORDER BY date"""
+        )
+        new_users = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "by_city":     list(by_city),
+            "by_language": list(by_language),
+            "activity":    list(activity),
+            "page_views":  list(page_views),
+            "new_users":   [{**dict(u),"date":str(u["date"])} for u in new_users]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/powerbi/product-data", methods=["GET"])
+def powerbi_product_data():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Products by room with avg rating
+        cursor.execute(
+            """SELECT r.name as room,
+               COUNT(p.id) as product_count,
+               COALESCE(AVG(pr.rating),0) as avg_rating,
+               COUNT(pr.id) as total_reviews
+               FROM rooms r
+               LEFT JOIN products p ON p.room_id = r.id
+               LEFT JOIN product_reviews pr ON pr.product_id = p.id
+               GROUP BY r.name
+               ORDER BY product_count DESC"""
+        )
+        by_room = cursor.fetchall()
+
+        # Products by style
+        cursor.execute(
+            """SELECT style_tag, COUNT(*) as count,
+               AVG(price) as avg_price
+               FROM products
+               WHERE style_tag IS NOT NULL
+               GROUP BY style_tag
+               ORDER BY count DESC"""
+        )
+        by_style = cursor.fetchall()
+
+        # Price distribution
+        cursor.execute(
+            """SELECT
+               CASE
+                 WHEN price < 1000    THEN 'Under 1K'
+                 WHEN price < 5000    THEN '1K - 5K'
+                 WHEN price < 10000   THEN '5K - 10K'
+                 WHEN price < 50000   THEN '10K - 50K'
+                 ELSE 'Above 50K'
+               END as price_range,
+               COUNT(*) as count
+               FROM products
+               GROUP BY price_range
+               ORDER BY count DESC"""
+        )
+        price_dist = cursor.fetchall()
+
+        # Most wishlisted products
+        cursor.execute(
+            """SELECT p.name, p.brand, r.name as room,
+               COUNT(w.id) as wishlist_count
+               FROM wishlist w
+               JOIN products p ON w.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               GROUP BY p.name, p.brand, r.name
+               ORDER BY wishlist_count DESC
+               LIMIT 10"""
+        )
+        most_wishlisted = cursor.fetchall()
+
+        # Review sentiment
+        cursor.execute(
+            """SELECT
+               CASE
+                 WHEN rating = 5 THEN 'Excellent'
+                 WHEN rating = 4 THEN 'Good'
+                 WHEN rating = 3 THEN 'Average'
+                 WHEN rating = 2 THEN 'Poor'
+                 ELSE 'Bad'
+               END as sentiment,
+               COUNT(*) as count
+               FROM product_reviews
+               GROUP BY sentiment
+               ORDER BY count DESC"""
+        )
+        review_sentiment = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "by_room":          [{**dict(r),"avg_rating":float(r["avg_rating"])} for r in by_room],
+            "by_style":         [{**dict(s),"avg_price":float(s["avg_price"] or 0)} for s in by_style],
+            "price_dist":       list(price_dist),
+            "most_wishlisted":  list(most_wishlisted),
+            "review_sentiment": list(review_sentiment)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/powerbi/export-csv", methods=["GET"])
+def export_csv():
+    try:
+        import csv
+        import io as string_io
+
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        export_type = request.args.get("type", "orders")
+
+        if export_type == "orders":
+            cursor.execute(
+                """SELECT o.id, u.name as customer, u.city,
+                   o.grand_total, o.status,
+                   o.created_at
+                   FROM orders o
+                   JOIN users u ON o.user_id = u.id
+                   ORDER BY o.created_at DESC"""
+            )
+        elif export_type == "products":
+            cursor.execute(
+                """SELECT p.id, p.name, r.name as room,
+                   p.price, p.brand, p.stock_qty,
+                   p.style_tag, p.material
+                   FROM products p
+                   JOIN rooms r ON p.room_id = r.id
+                   ORDER BY r.name, p.name"""
+            )
+        elif export_type == "reviews":
+            cursor.execute(
+                """SELECT pr.id, p.name as product,
+                   u.name as reviewer, pr.rating,
+                   pr.review_text, pr.is_verified,
+                   pr.created_at
+                   FROM product_reviews pr
+                   JOIN products p ON pr.product_id = p.id
+                   JOIN users u ON pr.user_id = u.id
+                   ORDER BY pr.created_at DESC"""
+            )
+
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        if not rows:
+            return jsonify({"error": "No data found"}), 404
+
+        output  = string_io.StringIO()
+        writer  = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: str(v) for k, v in dict(row).items()})
+
+        response = make_response(output.getvalue())
+        response.headers["Content-Type"]        = "text/csv"
+        response.headers["Content-Disposition"] = f"attachment; filename=homebot_{export_type}.csv"
+        return response
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)     

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HomeBot AI — Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:sans-serif; background:#f0f2f5; color:#333; }
+  .header { background:#BA7517; padding:20px 30px; display:flex; align-items:center; justify-content:space-between; }
+  .header h1 { color:white; font-size:22px; }
+  .header span { color:#FFE0A0; font-size:13px; }
+  .header a { background:white; color:#BA7517; padding:8px 16px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; }
+  .container { max-width:1200px; margin:0 auto; padding:24px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .kpi { background:white; border-radius:12px; padding:20px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+  .kpi .icon { font-size:32px; margin-bottom:8px; }
+  .kpi .value { font-size:28px; font-weight:700; color:#BA7517; }
+  .kpi .label { font-size:13px; color:#888; margin-top:4px; }
+  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+  .chart-box { background:white; border-radius:12px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+  .chart-box h3 { font-size:15px; font-weight:600; margin-bottom:16px; color:#333; }
+  .chart-box.full { grid-column:1/-1; }
+  .export-section { background:white; border-radius:12px; padding:20px; margin-bottom:24px; }
+  .export-section h3 { font-size:15px; font-weight:600; margin-bottom:16px; }
+  .export-btns { display:flex; gap:12px; flex-wrap:wrap; }
+  .export-btn { background:#BA7517; color:white; border:none; border-radius:8px; padding:10px 20px; cursor:pointer; font-size:13px; font-weight:600; text-decoration:none; display:inline-block; }
+  .export-btn.blue { background:#0C447C; }
+  .export-btn.green { background:#085041; }
+  .table-box { background:white; border-radius:12px; padding:20px; margin-bottom:24px; box-shadow:0 2px 8px rgba(0,0,0,0.06); overflow-x:auto; }
+  .table-box h3 { font-size:15px; font-weight:600; margin-bottom:16px; }
+  table { width:100%; border-collapse:collapse; }
+  th { background:#f8f9fa; padding:10px 12px; text-align:left; font-size:12px; color:#666; border-bottom:1px solid #eee; }
+  td { padding:10px 12px; font-size:13px; border-bottom:0.5px solid #f0f0f0; }
+  .badge { padding:3px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .badge.gold { background:#FFF3DC; color:#BA7517; }
+  .badge.green { background:#E1F5EE; color:#085041; }
+  .badge.blue { background:#E6F1FB; color:#0C447C; }
+  .loading { text-align:center; padding:40px; color:#888; }
+  @media(max-width:768px) { .kpi-grid{grid-template-columns:1fr 1fr;} .charts-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🏠 HomeBot AI — Analytics Dashboard</h1>
+    <span id="lastUpdated">Loading...</span>
+  </div>
+  <a href="http://localhost:3000" target="_blank">View App →</a>
+</div>
+
+<div class="container">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="loading">Loading KPIs...</div>
+  </div>
+
+  <!-- Export Section -->
+  <div class="export-section">
+    <h3>📥 Export Data for Power BI</h3>
+    <div class="export-btns">
+      <a href="http://127.0.0.1:5000/api/powerbi/export-csv?type=orders" class="export-btn">📦 Export Orders CSV</a>
+      <a href="http://127.0.0.1:5000/api/powerbi/export-csv?type=products" class="export-btn blue">🏠 Export Products CSV</a>
+      <a href="http://127.0.0.1:5000/api/powerbi/export-csv?type=reviews" class="export-btn green">⭐ Export Reviews CSV</a>
+      <button onclick="window.print()" class="export-btn" style="background:#555">🖨️ Print Dashboard</button>
+    </div>
+  </div>
+
+  <!-- Charts Row 1 -->
+  <div class="charts-grid">
+    <div class="chart-box">
+      <h3>💰 Revenue by Room</h3>
+      <canvas id="revenueChart" height="200"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>📦 Orders by Status</h3>
+      <canvas id="statusChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="charts-grid">
+    <div class="chart-box">
+      <h3>🎨 Products by Style</h3>
+      <canvas id="styleChart" height="200"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>⭐ Review Sentiment</h3>
+      <canvas id="sentimentChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Full Width Chart -->
+  <div class="charts-grid">
+    <div class="chart-box full">
+      <h3>📈 Daily Revenue (Last 30 Days)</h3>
+      <canvas id="dailyChart" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts Row 3 -->
+  <div class="charts-grid">
+    <div class="chart-box">
+      <h3>🌍 Users by City</h3>
+      <canvas id="cityChart" height="200"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>💬 Users by Language</h3>
+      <canvas id="langChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Top Products Table -->
+  <div class="table-box">
+    <h3>🏆 Top Selling Products</h3>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Product</th><th>Brand</th><th>Room</th><th>Units Sold</th><th>Revenue</th></tr>
+      </thead>
+      <tbody id="topProductsTable">
+        <tr><td colspan="6" style="text-align:center;color:#888">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Most Wishlisted Table -->
+  <div class="table-box">
+    <h3>❤️ Most Wishlisted Products</h3>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Product</th><th>Brand</th><th>Room</th><th>Wishlist Count</th></tr>
+      </thead>
+      <tbody id="wishlistTable">
+        <tr><td colspan="5" style="text-align:center;color:#888">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Price Distribution Table -->
+  <div class="table-box">
+    <h3>💰 Price Distribution</h3>
+    <table>
+      <thead>
+        <tr><th>Price Range</th><th>Product Count</th><th>% of Catalog</th></tr>
+      </thead>
+      <tbody id="priceTable">
+        <tr><td colspan="3" style="text-align:center;color:#888">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const API = 'http://127.0.0.1:5000';
+const COLORS = ['#BA7517','#0C447C','#085041','#8B00FF','#FF6B00','#E91E63','#00BCD4','#FF5722'];
+
+async function loadDashboard() {
+  try {
+    // Load overview KPIs
+    const ov = await fetch(`${API}/api/powerbi/overview`).then(r=>r.json());
+    document.getElementById('kpiGrid').innerHTML = `
+      <div class="kpi"><div class="icon">📦</div><div class="value">${ov.total_products}</div><div class="label">Total Products</div></div>
+      <div class="kpi"><div class="icon">👥</div><div class="value">${ov.total_users}</div><div class="label">Total Users</div></div>
+      <div class="kpi"><div class="icon">🛒</div><div class="value">${ov.total_orders}</div><div class="label">Total Orders</div></div>
+      <div class="kpi"><div class="icon">💰</div><div class="value">₹${Number(ov.total_revenue).toLocaleString('en-IN')}</div><div class="label">Total Revenue</div></div>
+      <div class="kpi"><div class="icon">⭐</div><div class="value">${ov.total_reviews}</div><div class="label">Reviews</div></div>
+      <div class="kpi"><div class="icon">🌟</div><div class="value">${Number(ov.avg_rating).toFixed(1)}</div><div class="label">Avg Rating</div></div>
+      <div class="kpi"><div class="icon">❤️</div><div class="value">${ov.total_wishlists}</div><div class="label">Wishlists</div></div>
+      <div class="kpi"><div class="icon">🎉</div><div class="value">${ov.active_sales}</div><div class="label">Active Sales</div></div>
+    `;
+    document.getElementById('lastUpdated').textContent = `Last updated: ${new Date().toLocaleTimeString('en-IN')}`;
+
+    // Load sales data
+    const sd = await fetch(`${API}/api/powerbi/sales-data`).then(r=>r.json());
+
+    // Revenue by room chart
+    new Chart(document.getElementById('revenueChart'), {
+      type: 'bar',
+      data: {
+        labels: sd.by_room.map(r=>r.room),
+        datasets: [{ label:'Revenue (₹)', data: sd.by_room.map(r=>r.revenue), backgroundColor: COLORS }]
+      },
+      options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+    });
+
+    // Orders by status chart
+    new Chart(document.getElementById('statusChart'), {
+      type: 'doughnut',
+      data: {
+        labels: sd.by_status.map(s=>s.status),
+        datasets: [{ data: sd.by_status.map(s=>s.count), backgroundColor: COLORS }]
+      },
+      options: { responsive:true }
+    });
+
+    // Daily revenue chart
+    new Chart(document.getElementById('dailyChart'), {
+      type: 'line',
+      data: {
+        labels: sd.daily_revenue.map(d=>d.date),
+        datasets: [{
+          label:'Daily Revenue (₹)',
+          data: sd.daily_revenue.map(d=>d.revenue),
+          borderColor:'#BA7517', backgroundColor:'rgba(186,117,23,0.1)', fill:true, tension:0.4
+        }]
+      },
+      options: { responsive:true, scales:{y:{beginAtZero:true}} }
+    });
+
+    // Top products table
+    document.getElementById('topProductsTable').innerHTML = sd.top_products.length > 0
+      ? sd.top_products.map((p,i)=>`
+          <tr>
+            <td><span class="badge gold">#${i+1}</span></td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.brand||'—'}</td>
+            <td>${p.room}</td>
+            <td><span class="badge green">${p.total_sold} units</span></td>
+            <td><strong style="color:#BA7517">₹${Number(p.revenue||0).toLocaleString('en-IN')}</strong></td>
+          </tr>`).join('')
+      : '<tr><td colspan="6" style="text-align:center;color:#888">No orders yet</td></tr>';
+
+    // Load product data
+    const pd = await fetch(`${API}/api/powerbi/product-data`).then(r=>r.json());
+
+    // Style chart
+    new Chart(document.getElementById('styleChart'), {
+      type: 'pie',
+      data: {
+        labels: pd.by_style.map(s=>s.style_tag),
+        datasets: [{ data: pd.by_style.map(s=>s.count), backgroundColor: COLORS }]
+      },
+      options: { responsive:true }
+    });
+
+    // Sentiment chart
+    new Chart(document.getElementById('sentimentChart'), {
+      type: 'bar',
+      data: {
+        labels: pd.review_sentiment.map(s=>s.sentiment),
+        datasets: [{ label:'Reviews', data: pd.review_sentiment.map(s=>s.count), backgroundColor: ['#085041','#0C447C','#BA7517','#FF6B00','#c00'] }]
+      },
+      options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+    });
+
+    // Most wishlisted table
+    document.getElementById('wishlistTable').innerHTML = pd.most_wishlisted.length > 0
+      ? pd.most_wishlisted.map((p,i)=>`
+          <tr>
+            <td><span class="badge gold">#${i+1}</span></td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.brand||'—'}</td>
+            <td>${p.room}</td>
+            <td><span class="badge" style="background:#FCEBEB;color:#c00">❤️ ${p.wishlist_count}</span></td>
+          </tr>`).join('')
+      : '<tr><td colspan="5" style="text-align:center;color:#888">No wishlist data yet</td></tr>';
+
+    // Price distribution table
+    const totalProducts = pd.price_dist.reduce((sum,r)=>sum+r.count,0);
+    document.getElementById('priceTable').innerHTML = pd.price_dist.map(p=>`
+      <tr>
+        <td><span class="badge blue">₹ ${p.price_range}</span></td>
+        <td>${p.count} products</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:6px;background:#f0f0f0;border-radius:3px">
+              <div style="height:100%;background:#BA7517;border-radius:3px;width:${((p.count/totalProducts)*100).toFixed(0)}%"></div>
+            </div>
+            <span style="font-size:12px;color:#888">${((p.count/totalProducts)*100).toFixed(1)}%</span>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    // Load user data
+    const ud = await fetch(`${API}/api/powerbi/user-data`).then(r=>r.json());
+
+    // City chart
+    new Chart(document.getElementById('cityChart'), {
+      type: 'bar',
+      data: {
+        labels: ud.by_city.slice(0,8).map(c=>c.city||'Unknown'),
+        datasets: [{ label:'Users', data: ud.by_city.slice(0,8).map(c=>c.count), backgroundColor: '#BA7517' }]
+      },
+      options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{stepSize:1}}} }
+    });
+
+    // Language chart
+    new Chart(document.getElementById('langChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ud.by_language.map(l=>l.language||'Unknown'),
+        datasets: [{ data: ud.by_language.map(l=>l.count), backgroundColor: COLORS }]
+      },
+      options: { responsive:true }
+    });
+
+  } catch(err) {
+    console.error('Dashboard error:', err);
+    document.getElementById('kpiGrid').innerHTML = `<div style="color:red;padding:20px">Error: ${err.message}. Make sure Flask is running!</div>`;
+  }
+}
+
+loadDashboard();
+// Auto refresh every 60 seconds
+setInterval(loadDashboard, 60000);
+</script>
+</body>
+</html>

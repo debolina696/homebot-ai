@@ -1,0 +1,42 @@
+id,name,room,price,brand,stock_qty,style_tag,material
+3,Hindware Wall Tap,Bathroom,2200.00,Hindware,79,modern,None
+2,Jaquar Shower System,Bathroom,12000.00,Jaquar,29,luxury,None
+4,Parryware WC Toilet,Bathroom,18500.00,Parryware,20,modern,None
+1,RAK Ceramic Floor Tile,Bathroom,850.00,RAK,149,modern,None
+6,LED Ceiling Light,Bedroom,1500.00,Philips,199,modern,None
+7,Laminate Flooring,Bedroom,95.00,Pergo,499,classic,None
+5,Wooden Wardrobe 6ft,Bedroom,18000.00,Godrej,14,classic,None
+25,Crockery Cabinet,Dining Room,15000.00,Godrej,8,classic,None
+24,Dining Chairs Set of 6,Dining Room,18000.00,Durian,12,classic,None
+22,Dining Room Floor Tile,Dining Room,120.00,Kajaria,400,modern,None
+20,Dining Table 6 Seater,Dining Room,25000.00,Durian,9,classic,None
+23,PVC Wall Panel Dining,Dining Room,85.00,ACP,200,modern,None
+21,Pendant Light Dining,Dining Room,4500.00,Philips,30,modern,None
+34,Exterior Paint,Exterior,3500.00,Asian Paints,25,modern,None
+37,Garden Fountain,Exterior,12000.00,Stone Craft,6,classic,None
+33,Garden Path Light,Exterior,1200.00,Philips,40,modern,None
+35,Main Door Teak,Exterior,35000.00,Godrej,10,classic,None
+36,Outdoor Tiles,Exterior,95.00,Kajaria,500,modern,None
+32,Outdoor Wall Cladding,Exterior,180.00,Stone Craft,200,modern,None
+8,Franke Kitchen Sink,Kitchen,8500.00,Franke,25,modern,None
+39,Kitchen Backsplash Tile,Kitchen,65.00,Kajaria,500,modern,None
+38,Kitchen Chimney,Kitchen,12000.00,Hindware,20,modern,None
+10,Kitchen Mixer Tap,Kitchen,3200.00,Kohler,60,modern,None
+40,Kitchen Storage Basket,Kitchen,4500.00,Franke,35,modern,None
+9,Modular Cabinet Set,Kitchen,45000.00,Sleek,10,modern,None
+41,Under Sink Cabinet,Kitchen,6500.00,Sleek,18,modern,None
+12,PVC Wall Panel,Living Room,85.00,ACP,300,modern,None
+13,Track Lighting Set,Living Room,4500.00,Havells,45,modern,None
+11,Vitrified Floor Tile,Living Room,120.00,Kajaria,400,modern,None
+27,Brass Diya Set,Puja Room,2500.00,Craftsvilla,30,traditional,None
+29,Marble Floor Tile Puja,Puja Room,250.00,RK Marble,100,traditional,None
+26,Marble Puja Mandir,Puja Room,18000.00,RK Marble,8,traditional,None
+31,Pooja Thali Set,Puja Room,1800.00,Craftsvilla,40,traditional,None
+28,Puja Room LED Light,Puja Room,800.00,Havells,50,traditional,None
+30,Teak Wood Mandir,Puja Room,35000.00,Craftsvilla,5,traditional,None
+15,Bookshelf 5 Tier,Study Room,6500.00,Nilkamal,20,classic,None
+16,LED Desk Lamp,Study Room,1200.00,Philips,50,modern,None
+17,Laminate Flooring Study,Study Room,95.00,Pergo,300,classic,None
+18,Study Chair Ergonomic,Study Room,8500.00,Godrej,25,modern,None
+14,Study Table with Shelves,Study Room,12000.00,Godrej,15,modern,None
+19,Wall Mounted Whiteboard,Study Room,3500.00,Havells,30,modern,None

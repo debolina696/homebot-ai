@@ -1,0 +1,11 @@
+id,customer,city,grand_total,status,created_at
+1,Rahul Sharma,Mumbai,100300.00,delivered,2026-05-28 10:54:11.291034
+2,Priya Patel,Ahmedabad,53100.00,delivered,2026-05-28 10:54:11.291034
+3,Amit Kumar,Delhi,141600.00,processing,2026-05-28 10:54:11.291034
+4,Deepa Nair,Chennai,41300.00,delivered,2026-05-28 10:54:11.291034
+5,Suresh Reddy,Hyderabad,79060.00,shipped,2026-05-28 10:54:11.291034
+6,Anita Singh,Kolkata,33040.00,delivered,2026-05-28 10:54:11.291034
+7,Vijay Menon,Kochi,112100.00,processing,2026-05-28 10:54:11.291034
+8,Kavita Joshi,Pune,49560.00,delivered,2026-05-28 10:54:11.291034
+9,Rahul Sharma,Mumbai,47259.00,pending,2026-05-28 10:54:11.291034
+10,Rahul Sharma,Mumbai,23122.10,pending,2026-05-28 10:54:11.291034
