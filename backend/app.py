@@ -43,10 +43,52 @@ def translate(text, from_lang, to_lang):
     except:
         return text
 
+# ── HEALTH CHECK ──
 @app.route("/")
 def home():
     return jsonify({"message": "HomeBot AI Backend Running", "version": "2.0", "status": "ok"})
 
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM products")
+        product_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM orders")
+        order_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM product_reviews")
+        review_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM wishlist")
+        wishlist_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM festival_sales WHERE is_active=TRUE")
+        sale_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM coupons WHERE is_active=TRUE")
+        coupon_count = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "status":       "ok",
+            "version":      "2.0",
+            "products":     product_count,
+            "users":        user_count,
+            "orders":       order_count,
+            "reviews":      review_count,
+            "wishlists":    wishlist_count,
+            "active_sales": sale_count,
+            "coupons":      coupon_count,
+            "features": [
+                "AI Chat","Reviews","Wishlist","Compare",
+                "Festival Sales","Image Gallery",
+                "Personalization","Recommendations","Coupons"
+            ]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── ROOMS ──
 @app.route("/api/rooms", methods=["GET"])
 def get_rooms():
     try:
@@ -54,13 +96,12 @@ def get_rooms():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT * FROM rooms ORDER BY id")
         rooms  = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"rooms": list(rooms)})
     except Exception as e:
-        print(f"get_rooms error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ── PRODUCTS ──
 @app.route("/api/products/<int:room_id>", methods=["GET"])
 def get_products(room_id):
     try:
@@ -78,13 +119,13 @@ def get_products(room_id):
             (room_id,)
         )
         products = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"room_id": room_id, "products": list(products)})
     except Exception as e:
         print(f"get_products error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ── AI CHAT ──
 @app.route("/api/chat", methods=["POST"])
 def chat():
     try:
@@ -115,9 +156,9 @@ Give a helpful friendly recommendation in 2-3 sentences."""
             final_response = english_response
         return jsonify({"reply": final_response, "detected_lang": lang_name, "status": "ok"})
     except Exception as e:
-        print(f"chat error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ── BUDGET ──
 @app.route("/api/budget", methods=["POST"])
 def calculate_budget():
     data        = request.get_json()
@@ -127,6 +168,7 @@ def calculate_budget():
     grand_total = round(total + gst, 2)
     return jsonify({"subtotal": total, "gst_18pct": gst, "grand_total": grand_total, "currency": "INR"})
 
+# ── CART ──
 @app.route("/api/cart", methods=["POST"])
 def add_to_cart():
     try:
@@ -137,13 +179,12 @@ def add_to_cart():
             "INSERT INTO cart (user_id, product_id, quantity) VALUES (%s,%s,%s)",
             (data.get("user_id", 1), data.get("product_id"), data.get("quantity", 1))
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"message": "Added to cart", "status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── PDF ──
 @app.route("/api/generate-pdf", methods=["POST"])
 def generate_pdf():
     try:
@@ -201,6 +242,7 @@ def generate_pdf():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── WHATSAPP ──
 @app.route("/api/notify-whatsapp", methods=["POST"])
 def notify_whatsapp():
     try:
@@ -218,6 +260,7 @@ def notify_whatsapp():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── LOGIN ──
 @app.route("/api/login", methods=["POST"])
 def login():
     try:
@@ -229,14 +272,14 @@ def login():
             (data.get("email"), data.get("password"))
         )
         user = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         if user:
             return jsonify({"status": "ok", "user": {"id": user["id"], "name": user["name"], "email": user["email"], "language": user["language"], "city": user["city"]}})
         return jsonify({"status": "error", "message": "Invalid email or password"}), 401
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── REGISTER ──
 @app.route("/api/register", methods=["POST"])
 def register():
     try:
@@ -248,13 +291,12 @@ def register():
             (data.get("name"), data.get("email"), data.get("password"), data.get("phone"), data.get("city"), data.get("language","english"))
         )
         user_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok", "user_id": user_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── SEARCH ──
 @app.route("/api/search", methods=["GET"])
 def search_products():
     try:
@@ -278,30 +320,24 @@ def search_products():
             sql += " AND (LOWER(p.name) LIKE %s OR LOWER(p.description) LIKE %s OR LOWER(p.brand) LIKE %s)"
             params.extend([f"%{query.lower()}%"] * 3)
         if room_id:
-            sql += " AND p.room_id = %s"
-            params.append(int(room_id))
+            sql += " AND p.room_id = %s"; params.append(int(room_id))
         if min_price:
-            sql += " AND p.price >= %s"
-            params.append(float(min_price))
+            sql += " AND p.price >= %s"; params.append(float(min_price))
         if max_price:
-            sql += " AND p.price <= %s"
-            params.append(float(max_price))
+            sql += " AND p.price <= %s"; params.append(float(max_price))
         if style:
-            sql += " AND LOWER(p.style_tag) = %s"
-            params.append(style.lower())
+            sql += " AND LOWER(p.style_tag) = %s"; params.append(style.lower())
         if brand:
-            sql += " AND LOWER(p.brand) = %s"
-            params.append(brand.lower())
+            sql += " AND LOWER(p.brand) = %s"; params.append(brand.lower())
         sql += " GROUP BY p.id, r.name ORDER BY p.price ASC"
         cursor.execute(sql, params)
         products = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"products": list(products), "count": len(products), "query": query})
     except Exception as e:
-        print(f"search error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ── BRANDS & STYLES ──
 @app.route("/api/brands", methods=["GET"])
 def get_brands():
     try:
@@ -309,8 +345,7 @@ def get_brands():
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL ORDER BY brand")
         brands = [row[0] for row in cursor.fetchall()]
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"brands": brands})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -322,25 +357,29 @@ def get_styles():
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT style_tag FROM products WHERE style_tag IS NOT NULL ORDER BY style_tag")
         styles = [row[0] for row in cursor.fetchall()]
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"styles": styles})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── ORDERS ──
 @app.route("/api/orders", methods=["POST"])
 def place_order():
     try:
         data        = request.get_json()
         user_id     = data.get("user_id", 1)
         items       = data.get("items", [])
+        coupon_id   = data.get("coupon_id", None)
+        coupon_disc = data.get("coupon_discount", 0)
         if not items:
             return jsonify({"error": "No items"}), 400
         subtotal    = sum(i["price"] * i["qty"] for i in items)
         gst         = round(subtotal * 0.18, 2)
-        grand_total = round(subtotal + gst, 2)
-        conn        = get_db()
-        cursor      = conn.cursor()
+        grand_total = round(subtotal + gst - coupon_disc, 2)
+        if grand_total < 0:
+            grand_total = 0
+        conn   = get_db()
+        cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO orders (user_id,total_amount,gst_amount,grand_total,status) VALUES (%s,%s,%s,%s,'pending') RETURNING id",
             (user_id, subtotal, gst, grand_total)
@@ -355,10 +394,17 @@ def place_order():
                 "UPDATE products SET stock_qty = stock_qty - %s WHERE id = %s",
                 (item["qty"], item["id"])
             )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return jsonify({"status": "ok", "order_id": order_id, "grand_total": grand_total})
+        if coupon_id and coupon_disc > 0:
+            cursor.execute(
+                "INSERT INTO coupon_usage (coupon_id,user_id,order_id,discount) VALUES (%s,%s,%s,%s)",
+                (coupon_id, user_id, order_id, coupon_disc)
+            )
+            cursor.execute(
+                "UPDATE coupons SET used_count=used_count+1 WHERE id=%s",
+                (coupon_id,)
+            )
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status": "ok", "order_id": order_id, "grand_total": grand_total, "discount": coupon_disc})
     except Exception as e:
         print(f"place_order error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -369,22 +415,21 @@ def get_orders(user_id):
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(
-            "SELECT o.*, COUNT(oi.id) as item_count FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id WHERE o.user_id = %s GROUP BY o.id ORDER BY o.created_at DESC",
+            "SELECT o.*, COUNT(oi.id) as item_count FROM orders o LEFT JOIN order_items oi ON o.id=oi.order_id WHERE o.user_id=%s GROUP BY o.id ORDER BY o.created_at DESC",
             (user_id,)
         )
         orders = cursor.fetchall()
         result = []
         for order in orders:
             cursor.execute(
-                "SELECT oi.*, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = %s",
+                "SELECT oi.*, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id=p.id WHERE oi.order_id=%s",
                 (order["id"],)
             )
             od               = dict(order)
             od["items"]      = list(cursor.fetchall())
             od["created_at"] = str(order["created_at"])
             result.append(od)
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"orders": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -395,28 +440,27 @@ def update_order_status(order_id):
         data   = request.get_json()
         conn   = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE orders SET status = %s WHERE id = %s", (data.get("status","pending"), order_id))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        cursor.execute("UPDATE orders SET status=%s WHERE id=%s", (data.get("status","pending"), order_id))
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── TRACK ORDER ──
 @app.route("/api/track/<int:order_id>", methods=["GET"])
 def track_order(order_id):
     try:
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(
-            "SELECT o.*, u.name as customer_name, u.email, u.phone, u.city FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = %s",
+            "SELECT o.*, u.name as customer_name, u.email, u.phone, u.city FROM orders o JOIN users u ON o.user_id=u.id WHERE o.id=%s",
             (order_id,)
         )
         order = cursor.fetchone()
         if not order:
             return jsonify({"error": "Order not found"}), 404
         cursor.execute(
-            "SELECT oi.*, p.name as product_name, p.brand, r.name as room_name FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN rooms r ON p.room_id = r.id WHERE oi.order_id = %s",
+            "SELECT oi.*, p.name as product_name, p.brand, r.name as room_name FROM order_items oi JOIN products p ON oi.product_id=p.id JOIN rooms r ON p.room_id=r.id WHERE oi.order_id=%s",
             (order_id,)
         )
         od               = dict(order)
@@ -424,17 +468,17 @@ def track_order(order_id):
         od["created_at"] = str(order["created_at"])
         status           = order["status"]
         od["timeline"]   = [
-            {"step": "Order Placed", "icon": "📋", "done": True,                                         "desc": "Your order has been received"},
-            {"step": "Processing",   "icon": "⚙️", "done": status in ["processing","shipped","delivered"],"desc": "We are preparing your items"},
-            {"step": "Shipped",      "icon": "🚚", "done": status in ["shipped","delivered"],             "desc": "Your order is on the way"},
-            {"step": "Delivered",    "icon": "✅", "done": status == "delivered",                        "desc": "Order delivered successfully"},
+            {"step":"Order Placed","icon":"📋","done":True,                                         "desc":"Your order has been received"},
+            {"step":"Processing",  "icon":"⚙️","done":status in ["processing","shipped","delivered"],"desc":"We are preparing your items"},
+            {"step":"Shipped",     "icon":"🚚","done":status in ["shipped","delivered"],             "desc":"Your order is on the way"},
+            {"step":"Delivered",   "icon":"✅","done":status=="delivered",                          "desc":"Order delivered successfully"},
         ]
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"order": od})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── PROFILE ──
 @app.route("/api/profile/<int:user_id>", methods=["GET"])
 def get_profile(user_id):
     try:
@@ -447,8 +491,7 @@ def get_profile(user_id):
             (user_id,)
         )
         stats = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"user": dict(user), "stats": dict(stats)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -463,13 +506,12 @@ def update_profile(user_id):
             "UPDATE users SET name=%s,phone=%s,city=%s,language=%s WHERE id=%s",
             (data.get("name"), data.get("phone"), data.get("city"), data.get("language"), user_id)
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── UPLOAD IMAGE ──
 @app.route("/api/upload-image", methods=["POST"])
 def upload_image():
     try:
@@ -494,9 +536,7 @@ def upload_image():
                 conn   = get_db()
                 cursor = conn.cursor()
                 cursor.execute("UPDATE products SET image_url=%s WHERE id=%s", (image_url, int(product_id)))
-                conn.commit()
-                cursor.close()
-                conn.close()
+                conn.commit(); cursor.close(); conn.close()
             except:
                 pass
         return jsonify({"status": "ok", "image_url": image_url})
@@ -504,16 +544,14 @@ def upload_image():
         return jsonify({"error": str(e)}), 500
 
 # ── ADMIN ──
-
 @app.route("/api/admin/products", methods=["GET"])
 def admin_get_products():
     try:
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute("SELECT p.*, r.name as room_name FROM products p JOIN rooms r ON p.room_id = r.id ORDER BY r.name, p.name")
+        cursor.execute("SELECT p.*, r.name as room_name FROM products p JOIN rooms r ON p.room_id=r.id ORDER BY r.name, p.name")
         products = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"products": list(products)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -529,9 +567,7 @@ def admin_add_product():
             (data.get("room_id"), data.get("name"), data.get("description"), data.get("price"), data.get("unit"), data.get("stock_qty",0), data.get("style_tag"), data.get("brand"), data.get("length_cm"), data.get("width_cm"), data.get("height_cm"), data.get("material"), data.get("color"), data.get("image_url"))
         )
         product_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok", "product_id": product_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -546,9 +582,7 @@ def admin_update_product(product_id):
             "UPDATE products SET room_id=%s,name=%s,description=%s,price=%s,unit=%s,stock_qty=%s,style_tag=%s,brand=%s,length_cm=%s,width_cm=%s,height_cm=%s,material=%s,color=%s,image_url=%s WHERE id=%s",
             (data.get("room_id"), data.get("name"), data.get("description"), data.get("price"), data.get("unit"), data.get("stock_qty"), data.get("style_tag"), data.get("brand"), data.get("length_cm"), data.get("width_cm"), data.get("height_cm"), data.get("material"), data.get("color"), data.get("image_url"), product_id)
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -559,9 +593,7 @@ def admin_delete_product(product_id):
         conn   = get_db()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM products WHERE id=%s", (product_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -585,8 +617,7 @@ def admin_stats():
         top_products = cursor.fetchall()
         cursor.execute("SELECT r.name as room, COALESCE(SUM(o.grand_total),0) as revenue FROM rooms r LEFT JOIN products p ON p.room_id=r.id LEFT JOIN order_items oi ON oi.product_id=p.id LEFT JOIN orders o ON o.id=oi.order_id GROUP BY r.name ORDER BY revenue DESC")
         revenue_by_room = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({
             "total_products":   total_products,
             "total_users":      total_users,
@@ -600,7 +631,6 @@ def admin_stats():
         return jsonify({"error": str(e)}), 500
 
 # ── ANALYTICS ──
-
 @app.route("/api/analytics/track", methods=["POST"])
 def track_activity():
     try:
@@ -611,9 +641,7 @@ def track_activity():
             "INSERT INTO user_activity (user_id,action,room_id,product_id,details) VALUES (%s,%s,%s,%s,%s)",
             (data.get("user_id",1), data.get("action",""), data.get("room_id"), data.get("product_id"), data.get("details",""))
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -628,9 +656,7 @@ def track_pageview():
             "INSERT INTO page_views (user_id,page,duration_sec) VALUES (%s,%s,%s)",
             (data.get("user_id",1), data.get("page",""), data.get("duration",0))
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -656,8 +682,7 @@ def analytics_dashboard():
         daily_orders = cursor.fetchall()
         cursor.execute("SELECT AVG(duration_sec) as avg_duration FROM page_views")
         avg_duration = cursor.fetchone()["avg_duration"] or 0
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({
             "total_users":          total_users,
             "active_today":         active_today,
@@ -665,14 +690,13 @@ def analytics_dashboard():
             "popular_products":     list(popular_products),
             "cart_products":        list(cart_products),
             "page_stats":           list(page_stats),
-            "daily_orders":         [{**dict(d), "date": str(d["date"]), "revenue": float(d["revenue"] or 0)} for d in daily_orders],
+            "daily_orders":         [{**dict(d),"date":str(d["date"]),"revenue":float(d["revenue"] or 0)} for d in daily_orders],
             "avg_session_duration": round(float(avg_duration), 1)
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ── RECOMMENDATIONS ──
-
 @app.route("/api/recommendations/<int:product_id>", methods=["GET"])
 def get_recommendations(product_id):
     try:
@@ -692,14 +716,8 @@ def get_recommendations(product_id):
             (current["style_tag"], product_id, current["room_id"])
         )
         same_style = cursor.fetchall()
-        cursor.execute(
-            "SELECT p.*, r.name as room_name, COUNT(*) as bought_together FROM order_items oi1 JOIN order_items oi2 ON oi1.order_id=oi2.order_id JOIN products p ON oi2.product_id=p.id JOIN rooms r ON p.room_id=r.id WHERE oi1.product_id=%s AND oi2.product_id!=%s GROUP BY p.id,r.name ORDER BY bought_together DESC LIMIT 4",
-            (product_id, product_id)
-        )
-        bought_together = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return jsonify({"same_room": list(same_room), "same_style": list(same_style), "bought_together": list(bought_together), "current_product": dict(current)})
+        cursor.close(); conn.close()
+        return jsonify({"same_room": list(same_room), "same_style": list(same_style), "current_product": dict(current)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -725,8 +743,7 @@ def get_user_recommendations(user_id):
                 "SELECT p.*, r.name as room_name, COUNT(oi.id) as order_count FROM products p JOIN rooms r ON p.room_id=r.id LEFT JOIN order_items oi ON oi.product_id=p.id GROUP BY p.id,r.name ORDER BY order_count DESC LIMIT 8"
             )
             recommendations = list(cursor.fetchall())
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"recommendations": recommendations, "favorite_rooms": list(fav_rooms)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -740,14 +757,12 @@ def get_trending():
             "SELECT p.*, r.name as room_name, COUNT(oi.id) as view_count FROM products p JOIN rooms r ON p.room_id=r.id LEFT JOIN order_items oi ON oi.product_id=p.id GROUP BY p.id,r.name ORDER BY view_count DESC, p.id ASC LIMIT 8"
         )
         trending = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"trending": list(trending), "hot_items": list(trending)[:4]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ── PERSONALIZATION ──
-
 @app.route("/api/personalization/<int:user_id>", methods=["GET"])
 def get_personalization(user_id):
     try:
@@ -771,8 +786,7 @@ def get_personalization(user_id):
         order_history = cursor.fetchall()
         cursor.execute("SELECT AVG(grand_total) as avg_spend, MAX(grand_total) as max_spend FROM orders WHERE user_id=%s", (user_id,))
         spend_info = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"profile": dict(profile), "preferences": prefs, "order_history": list(order_history), "spend_info": dict(spend_info)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -791,9 +805,7 @@ def update_personalization(user_id):
             "INSERT INTO user_style_profile (user_id,favorite_style,budget_range,color_pref,material_pref) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (user_id) DO UPDATE SET favorite_style=%s,budget_range=%s,color_pref=%s,material_pref=%s,updated_at=CURRENT_TIMESTAMP",
             (user_id,fs,br,cp,mp,fs,br,cp,mp)
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -826,8 +838,7 @@ def personalized_chat():
             (user_id,)
         )
         past_orders = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         user_name  = user_info["name"] if user_info else "Customer"
         user_city  = user_info["city"] if user_info else "India"
         style_pref = style_profile["favorite_style"] if style_profile else "modern"
@@ -847,7 +858,6 @@ Give a PERSONALIZED recommendation in 2-3 sentences. Address by name."""
         return jsonify({"error": str(e)}), 500
 
 # ── REVIEWS ──
-
 @app.route("/api/reviews", methods=["POST"])
 def submit_review():
     try:
@@ -878,9 +888,7 @@ def submit_review():
                 "INSERT INTO product_reviews (product_id,user_id,rating,review_text,is_verified,review_photo,is_anonymous,display_name) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (product_id,user_id,rating,review_text,is_verified,review_photo,is_anonymous,display_name)
             )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok", "is_verified": is_verified})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -900,13 +908,10 @@ def get_reviews(product_id):
             (product_id,)
         )
         summary = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         result = []
         for r in reviews:
-            d = dict(r)
-            d["created_at"] = str(r["created_at"])
-            result.append(d)
+            d = dict(r); d["created_at"] = str(r["created_at"]); result.append(d)
         return jsonify({"reviews": result, "summary": dict(summary)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -917,9 +922,7 @@ def mark_helpful(review_id):
         conn   = get_db()
         cursor = conn.cursor()
         cursor.execute("UPDATE product_reviews SET helpful_count=helpful_count+1 WHERE id=%s", (review_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -934,9 +937,7 @@ def rate_chatbot():
             "INSERT INTO chatbot_ratings (user_id,session_msg,rating,feedback) VALUES (%s,%s,%s,%s)",
             (data.get("user_id",1), data.get("session_msg",""), data.get("rating",5), data.get("feedback",""))
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -948,8 +949,7 @@ def chatbot_stats():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT COUNT(*) as total_ratings, COALESCE(AVG(rating),0) as avg_rating, COUNT(CASE WHEN rating>=4 THEN 1 END) as positive, COUNT(CASE WHEN rating<=2 THEN 1 END) as negative FROM chatbot_ratings")
         stats = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"stats": dict(stats)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -963,14 +963,12 @@ def get_top_rated_all():
             "SELECT p.*, r.name as room_name, COALESCE(AVG(pr.rating),0) as avg_rating, COUNT(pr.id) as review_count FROM products p JOIN rooms r ON p.room_id=r.id LEFT JOIN product_reviews pr ON pr.product_id=p.id GROUP BY p.id,r.name HAVING COUNT(pr.id) > 0 ORDER BY avg_rating DESC, review_count DESC LIMIT 10"
         )
         products = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"products": list(products)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # ── BUNDLES ──
-
 @app.route("/api/bundles/<int:room_id>", methods=["GET"])
 def get_bundles(room_id):
     try:
@@ -985,208 +983,104 @@ def get_bundles(room_id):
             "SELECT p.*, r.name as room_name, COALESCE(AVG(pr.rating),0) as avg_rating, COUNT(pr.id) as review_count FROM products p JOIN rooms r ON p.room_id=r.id LEFT JOIN product_reviews pr ON pr.product_id=p.id GROUP BY p.id,r.name HAVING COALESCE(AVG(pr.rating),0) >= 4 ORDER BY avg_rating DESC LIMIT 6"
         )
         top_rated = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"bundle_products": list(bundle_products), "top_rated": list(top_rated)})
     except Exception as e:
-        print(f"bundles error: {e}")
         return jsonify({"bundle_products": [], "top_rated": []}), 200
-# ── GALLERY ROUTES ──
 
-# Route: Get all images for a product
+# ── GALLERY ──
 @app.route("/api/gallery/<int:product_id>", methods=["GET"])
 def get_gallery(product_id):
     try:
         conn   = get_db()
-        cursor = conn.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
-
-        # Get gallery images
-        cursor.execute(
-            """SELECT * FROM product_images
-               WHERE product_id = %s
-               ORDER BY sort_order ASC""",
-            (product_id,)
-        )
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM product_images WHERE product_id=%s ORDER BY sort_order ASC", (product_id,))
         gallery = cursor.fetchall()
-
-        # Also get main product image
-        cursor.execute(
-            "SELECT image_url FROM products WHERE id = %s",
-            (product_id,)
-        )
+        cursor.execute("SELECT image_url FROM products WHERE id=%s", (product_id,))
         product = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
+        cursor.close(); conn.close()
         images = []
-
-        # Add main image first if exists
         if product and product["image_url"]:
-            images.append({
-                "id":         0,
-                "product_id": product_id,
-                "image_url":  product["image_url"],
-                "image_type": "main",
-                "sort_order": -1
-            })
-
-        # Add gallery images
+            images.append({"id":0,"product_id":product_id,"image_url":product["image_url"],"image_type":"main","sort_order":-1})
         images.extend(list(gallery))
-
         return jsonify({"images": images, "count": len(images)})
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Route: Add image to gallery
 @app.route("/api/gallery/<int:product_id>", methods=["POST"])
 def add_gallery_image(product_id):
     try:
         import cloudinary
         import cloudinary.uploader
-
         cloudinary.config(
             cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
             api_key    = os.getenv("CLOUDINARY_API_KEY"),
             api_secret = os.getenv("CLOUDINARY_API_SECRET")
         )
-
         if "file" not in request.files:
             return jsonify({"error": "No file provided"}), 400
-
         file       = request.files["file"]
         sort_order = request.form.get("sort_order", 0)
         image_type = request.form.get("image_type", "gallery")
-
-        # Upload to Cloudinary
         result = cloudinary.uploader.upload(
-            file,
-            folder        = "homebot-gallery",
-            public_id     = f"gallery_{product_id}_{sort_order}_{os.urandom(4).hex()}",
-            overwrite     = False,
-            resource_type = "image"
+            file, folder="homebot-gallery",
+            public_id=f"gallery_{product_id}_{sort_order}_{os.urandom(4).hex()}",
+            overwrite=False, resource_type="image"
         )
         image_url = result["secure_url"]
-
-        # Save to database
         conn   = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO product_images
-               (product_id, image_url, image_type, sort_order)
-               VALUES (%s, %s, %s, %s)
-               RETURNING id""",
+            "INSERT INTO product_images (product_id,image_url,image_type,sort_order) VALUES (%s,%s,%s,%s) RETURNING id",
             (product_id, image_url, image_type, int(sort_order))
         )
         image_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return jsonify({
-            "status":    "ok",
-            "image_id":  image_id,
-            "image_url": image_url,
-            "message":   "Gallery image added!"
-        })
-
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status":"ok","image_id":image_id,"image_url":image_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Route: Delete gallery image
 @app.route("/api/gallery/image/<int:image_id>", methods=["DELETE"])
 def delete_gallery_image(image_id):
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM product_images WHERE id = %s",
-            (image_id,)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return jsonify({"status": "ok", "message": "Image deleted!"})
+        cursor.execute("DELETE FROM product_images WHERE id=%s", (image_id,))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    # ── FESTIVAL SALE ROUTES ──
 
+# ── FESTIVAL SALES ──
 @app.route("/api/sales", methods=["GET"])
 def get_sales():
     try:
         conn   = get_db()
-        cursor = conn.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
-        cursor.execute(
-            """SELECT * FROM festival_sales
-               WHERE is_active = TRUE
-               AND end_date > NOW()
-               ORDER BY created_at DESC"""
-        )
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM festival_sales WHERE is_active=TRUE AND end_date>NOW() ORDER BY created_at DESC")
         sales = cursor.fetchall()
         result = []
         for s in sales:
-            d = dict(s)
-            d["start_date"] = str(s["start_date"])
-            d["end_date"]   = str(s["end_date"])
-            d["created_at"] = str(s["created_at"])
-            result.append(d)
-        cursor.close()
-        conn.close()
+            d = dict(s); d["start_date"]=str(s["start_date"]); d["end_date"]=str(s["end_date"]); d["created_at"]=str(s["created_at"]); result.append(d)
+        cursor.close(); conn.close()
         return jsonify({"sales": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/sales/<int:sale_id>/products", methods=["GET"])
 def get_sale_products(sale_id):
     try:
         conn   = get_db()
-        cursor = conn.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
-
-        # Get sale info
-        cursor.execute(
-            "SELECT * FROM festival_sales WHERE id = %s",
-            (sale_id,)
-        )
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM festival_sales WHERE id=%s", (sale_id,))
         sale = cursor.fetchone()
         if not sale:
             return jsonify({"error": "Sale not found"}), 404
-
-        # Check if specific products are in this sale
         cursor.execute(
-            """SELECT sp.*, p.*, r.name as room_name,
-               sp.discount_pct as sale_discount
-               FROM sale_products sp
-               JOIN products p ON sp.product_id = p.id
-               JOIN rooms r ON p.room_id = r.id
-               WHERE sp.sale_id = %s""",
-            (sale_id,)
+            "SELECT p.*, r.name as room_name, %s as sale_discount FROM products p JOIN rooms r ON p.room_id=r.id ORDER BY RANDOM() LIMIT 20",
+            (sale["discount_pct"],)
         )
-        specific = cursor.fetchall()
-
-        # If no specific products — show all products with sale discount
-        if not specific:
-            cursor.execute(
-                """SELECT p.*, r.name as room_name,
-                   %s as sale_discount
-                   FROM products p
-                   JOIN rooms r ON p.room_id = r.id
-                   ORDER BY RANDOM() LIMIT 20""",
-                (sale["discount_pct"],)
-            )
-            products = cursor.fetchall()
-        else:
-            products = specific
-
+        products = cursor.fetchall()
         result = []
         for p in products:
             d = dict(p)
@@ -1198,17 +1092,11 @@ def get_sale_products(sale_id):
             d["discount_pct"]   = discount
             d["savings"]        = round(original_price - sale_price, 2)
             result.append(d)
-
-        sd = dict(sale)
-        sd["start_date"] = str(sale["start_date"])
-        sd["end_date"]   = str(sale["end_date"])
-
-        cursor.close()
-        conn.close()
+        sd = dict(sale); sd["start_date"]=str(sale["start_date"]); sd["end_date"]=str(sale["end_date"])
+        cursor.close(); conn.close()
         return jsonify({"sale": sd, "products": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/sales", methods=["POST"])
 def create_sale():
@@ -1217,21 +1105,14 @@ def create_sale():
         conn   = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO festival_sales
-               (name,description,discount_pct,start_date,end_date,banner_color,emoji)
-               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (data.get("name"), data.get("description"), data.get("discount_pct",10),
-             data.get("start_date"), data.get("end_date"),
-             data.get("banner_color","#BA7517"), data.get("emoji","sale"))
+            "INSERT INTO festival_sales (name,description,discount_pct,start_date,end_date,banner_color,emoji) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            (data.get("name"), data.get("description"), data.get("discount_pct",10), data.get("start_date"), data.get("end_date"), data.get("banner_color","#BA7517"), data.get("emoji","sale"))
         )
         sale_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status":"ok","sale_id":sale_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/sales/<int:sale_id>", methods=["PUT"])
 def update_sale(sale_id):
@@ -1240,56 +1121,41 @@ def update_sale(sale_id):
         conn   = get_db()
         cursor = conn.cursor()
         cursor.execute(
-            """UPDATE festival_sales SET
-               name=%s, description=%s, discount_pct=%s,
-               end_date=%s, is_active=%s
-               WHERE id=%s""",
-            (data.get("name"), data.get("description"),
-             data.get("discount_pct",10), data.get("end_date"),
-             data.get("is_active",True), sale_id)
+            "UPDATE festival_sales SET name=%s,description=%s,discount_pct=%s,end_date=%s,is_active=%s WHERE id=%s",
+            (data.get("name"), data.get("description"), data.get("discount_pct",10), data.get("end_date"), data.get("is_active",True), sale_id)
         )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status":"ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/sales/<int:sale_id>", methods=["DELETE"])
 def delete_sale(sale_id):
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE festival_sales SET is_active=FALSE WHERE id=%s",
-            (sale_id,)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        cursor.execute("UPDATE festival_sales SET is_active=FALSE WHERE id=%s", (sale_id,))
+        conn.commit(); cursor.close(); conn.close()
         return jsonify({"status":"ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    # ── WISHLIST ROUTES ──
 
+# ── WISHLIST ──
 @app.route("/api/wishlist/<int:user_id>", methods=["GET"])
 def get_wishlist(user_id):
     try:
         conn   = get_db()
-        cursor = conn.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(
             """SELECT w.id as wishlist_id, w.created_at,
                p.*, r.name as room_name,
                COALESCE(AVG(pr.rating),0) as avg_rating,
                COUNT(pr.id) as review_count
                FROM wishlist w
-               JOIN products p ON w.product_id = p.id
-               JOIN rooms r ON p.room_id = r.id
-               LEFT JOIN product_reviews pr ON pr.product_id = p.id
-               WHERE w.user_id = %s
+               JOIN products p ON w.product_id=p.id
+               JOIN rooms r ON p.room_id=r.id
+               LEFT JOIN product_reviews pr ON pr.product_id=p.id
+               WHERE w.user_id=%s
                GROUP BY w.id, w.created_at, p.id, r.name
                ORDER BY w.created_at DESC""",
             (user_id,)
@@ -1297,15 +1163,11 @@ def get_wishlist(user_id):
         items = cursor.fetchall()
         result = []
         for item in items:
-            d = dict(item)
-            d["created_at"] = str(item["created_at"])
-            result.append(d)
-        cursor.close()
-        conn.close()
+            d = dict(item); d["created_at"]=str(item["created_at"]); result.append(d)
+        cursor.close(); conn.close()
         return jsonify({"wishlist": result, "count": len(result)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/wishlist", methods=["POST"])
 def add_to_wishlist():
@@ -1316,57 +1178,29 @@ def add_to_wishlist():
         conn       = get_db()
         cursor     = conn.cursor()
         cursor.execute(
-            """INSERT INTO wishlist (user_id, product_id)
-               VALUES (%s, %s)
-               ON CONFLICT (user_id, product_id) DO NOTHING
-               RETURNING id""",
+            "INSERT INTO wishlist (user_id,product_id) VALUES (%s,%s) ON CONFLICT (user_id,product_id) DO NOTHING RETURNING id",
             (user_id, product_id)
         )
         result = cursor.fetchone()
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn.commit(); cursor.close(); conn.close()
         if result:
             return jsonify({"status": "ok", "message": "Added to wishlist!"})
         return jsonify({"status": "exists", "message": "Already in wishlist!"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/api/wishlist/<int:user_id>/<int:product_id>", methods=["DELETE"])
 def remove_from_wishlist(user_id, product_id):
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM wishlist WHERE user_id=%s AND product_id=%s",
-            (user_id, product_id)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return jsonify({"status": "ok", "message": "Removed from wishlist!"})
+        cursor.execute("DELETE FROM wishlist WHERE user_id=%s AND product_id=%s", (user_id, product_id))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-@app.route("/api/wishlist/check/<int:user_id>/<int:product_id>", methods=["GET"])
-def check_wishlist(user_id, product_id):
-    try:
-        conn   = get_db()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id FROM wishlist WHERE user_id=%s AND product_id=%s",
-            (user_id, product_id)
-        )
-        exists = cursor.fetchone() is not None
-        cursor.close()
-        conn.close()
-        return jsonify({"in_wishlist": exists})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    # ── COMPARE ROUTE ──
-
+# ── COMPARE ──
 @app.route("/api/compare", methods=["POST"])
 def compare_products():
     try:
@@ -1374,405 +1208,248 @@ def compare_products():
         product_ids = data.get("product_ids", [])
         if len(product_ids) < 2:
             return jsonify({"error": "Need at least 2 products"}), 400
-
         conn   = get_db()
-        cursor = conn.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor
-        )
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(
             """SELECT p.*, r.name as room_name,
-               COALESCE(AVG(pr.rating), 0) as avg_rating,
+               COALESCE(AVG(pr.rating),0) as avg_rating,
                COUNT(pr.id) as review_count
                FROM products p
-               JOIN rooms r ON p.room_id = r.id
-               LEFT JOIN product_reviews pr ON pr.product_id = p.id
-               WHERE p.id = ANY(%s)
+               JOIN rooms r ON p.room_id=r.id
+               LEFT JOIN product_reviews pr ON pr.product_id=p.id
+               WHERE p.id=ANY(%s)
                GROUP BY p.id, r.name""",
             (product_ids,)
         )
         products = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"products": list(products)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    # ── HEALTH CHECK WITH STATS ──
-@app.route("/api/health", methods=["GET"])
-def health_check():
+
+# ── COUPONS ──
+@app.route("/api/coupons/validate", methods=["POST"])
+def validate_coupon():
     try:
+        data        = request.get_json()
+        code        = data.get("code","").upper().strip()
+        user_id     = data.get("user_id", 1)
+        order_total = data.get("order_total", 0)
         conn   = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM products")
-        product_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM users")
-        user_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM orders")
-        order_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM product_reviews")
-        review_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM wishlist")
-        wishlist_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM festival_sales WHERE is_active=TRUE")
-        sale_count = cursor.fetchone()[0]
-        cursor.close()
-        conn.close()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute(
+            "SELECT * FROM coupons WHERE code=%s AND is_active=TRUE AND valid_from<=NOW() AND valid_until>=NOW()",
+            (code,)
+        )
+        coupon = cursor.fetchone()
+        if not coupon:
+            cursor.close(); conn.close()
+            return jsonify({"valid": False, "message": "Invalid or expired coupon code!"})
+        if coupon["used_count"] >= coupon["usage_limit"]:
+            cursor.close(); conn.close()
+            return jsonify({"valid": False, "message": "Coupon usage limit reached!"})
+        if order_total < float(coupon["min_order_value"]):
+            cursor.close(); conn.close()
+            return jsonify({"valid": False, "message": f"Minimum order value ₹{int(coupon['min_order_value']):,} required!"})
+        cursor.execute(
+            "SELECT id FROM coupon_usage WHERE coupon_id=%s AND user_id=%s",
+            (coupon["id"], user_id)
+        )
+        already_used = cursor.fetchone()
+        if already_used:
+            cursor.close(); conn.close()
+            return jsonify({"valid": False, "message": "You have already used this coupon!"})
+        if coupon["discount_type"] == "percent":
+            discount = round(order_total * float(coupon["discount_value"]) / 100, 2)
+            discount = min(discount, float(coupon["max_discount"]))
+        else:
+            discount = float(coupon["discount_value"])
+        cursor.close(); conn.close()
         return jsonify({
-            "status":        "ok",
-            "version":       "2.0",
-            "products":      product_count,
-            "users":         user_count,
-            "orders":        order_count,
-            "reviews":       review_count,
-            "wishlists":     wishlist_count,
-            "active_sales":  sale_count,
-            "features": [
-                "AI Chat", "Reviews", "Wishlist",
-                "Compare", "Festival Sales", "Image Gallery",
-                "Personalization", "Recommendations"
-            ]
+            "valid":          True,
+            "coupon_id":      coupon["id"],
+            "code":           coupon["code"],
+            "description":    coupon["description"],
+            "discount_type":  coupon["discount_type"],
+            "discount_value": float(coupon["discount_value"]),
+            "discount":       discount,
+            "message":        f"Coupon applied! You save Rs.{int(discount):,}"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-# ── POWER BI EXPORT ROUTES ──
 
+@app.route("/api/coupons/apply", methods=["POST"])
+def apply_coupon():
+    try:
+        data      = request.get_json()
+        coupon_id = data.get("coupon_id")
+        user_id   = data.get("user_id", 1)
+        order_id  = data.get("order_id")
+        discount  = data.get("discount", 0)
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO coupon_usage (coupon_id,user_id,order_id,discount) VALUES (%s,%s,%s,%s)",
+            (coupon_id, user_id, order_id, discount)
+        )
+        cursor.execute("UPDATE coupons SET used_count=used_count+1 WHERE id=%s", (coupon_id,))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/coupons", methods=["GET"])
+def get_all_coupons():
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT * FROM coupons WHERE is_active=TRUE AND valid_until>=NOW() ORDER BY discount_value DESC")
+        coupons = cursor.fetchall()
+        result  = []
+        for c in coupons:
+            d = dict(c); d["valid_from"]=str(c["valid_from"]); d["valid_until"]=str(c["valid_until"]); d["created_at"]=str(c["created_at"]); result.append(d)
+        cursor.close(); conn.close()
+        return jsonify({"coupons": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/coupons", methods=["POST"])
+def admin_create_coupon():
+    try:
+        data   = request.get_json()
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO coupons (code,description,discount_type,discount_value,min_order_value,max_discount,usage_limit,valid_until) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            (data.get("code","").upper(), data.get("description",""), data.get("discount_type","percent"), data.get("discount_value",10), data.get("min_order_value",0), data.get("max_discount",99999), data.get("usage_limit",100), data.get("valid_until"))
+        )
+        coupon_id = cursor.fetchone()[0]
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status": "ok", "coupon_id": coupon_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/coupons/<int:coupon_id>", methods=["DELETE"])
+def admin_delete_coupon(coupon_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE coupons SET is_active=FALSE WHERE id=%s", (coupon_id,))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── POWER BI EXPORT ──
 @app.route("/api/powerbi/overview", methods=["GET"])
 def powerbi_overview():
     try:
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-        # Total stats
-        cursor.execute("SELECT COUNT(*) as total FROM products")
-        total_products = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) as total FROM users")
-        total_users = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) as total FROM orders")
-        total_orders = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COALESCE(SUM(grand_total),0) as total FROM orders")
-        total_revenue = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) as total FROM product_reviews")
-        total_reviews = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COALESCE(AVG(rating),0) as avg FROM product_reviews")
-        avg_rating = cursor.fetchone()["avg"]
-
-        cursor.execute("SELECT COUNT(*) as total FROM wishlist")
-        total_wishlists = cursor.fetchone()["total"]
-
-        cursor.execute("SELECT COUNT(*) as total FROM festival_sales WHERE is_active=TRUE")
-        active_sales = cursor.fetchone()["total"]
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({
-            "total_products":  total_products,
-            "total_users":     total_users,
-            "total_orders":    total_orders,
-            "total_revenue":   float(total_revenue),
-            "total_reviews":   total_reviews,
-            "avg_rating":      float(avg_rating),
-            "total_wishlists": total_wishlists,
-            "active_sales":    active_sales
-        })
+        cursor.execute("SELECT COUNT(*) as total FROM products"); total_products = cursor.fetchone()["total"]
+        cursor.execute("SELECT COUNT(*) as total FROM users"); total_users = cursor.fetchone()["total"]
+        cursor.execute("SELECT COUNT(*) as total FROM orders"); total_orders = cursor.fetchone()["total"]
+        cursor.execute("SELECT COALESCE(SUM(grand_total),0) as total FROM orders"); total_revenue = cursor.fetchone()["total"]
+        cursor.execute("SELECT COUNT(*) as total FROM product_reviews"); total_reviews = cursor.fetchone()["total"]
+        cursor.execute("SELECT COALESCE(AVG(rating),0) as avg FROM product_reviews"); avg_rating = cursor.fetchone()["avg"]
+        cursor.execute("SELECT COUNT(*) as total FROM wishlist"); total_wishlists = cursor.fetchone()["total"]
+        cursor.execute("SELECT COUNT(*) as total FROM festival_sales WHERE is_active=TRUE"); active_sales = cursor.fetchone()["total"]
+        cursor.execute("SELECT COUNT(*) as total FROM coupons WHERE is_active=TRUE"); active_coupons = cursor.fetchone()["total"]
+        cursor.close(); conn.close()
+        return jsonify({"total_products":total_products,"total_users":total_users,"total_orders":total_orders,"total_revenue":float(total_revenue),"total_reviews":total_reviews,"avg_rating":float(avg_rating),"total_wishlists":total_wishlists,"active_sales":active_sales,"active_coupons":active_coupons})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/powerbi/sales-data", methods=["GET"])
 def powerbi_sales_data():
     try:
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-        # Daily revenue last 30 days
-        cursor.execute(
-            """SELECT DATE(created_at) as date,
-               COUNT(*) as orders,
-               SUM(grand_total) as revenue,
-               AVG(grand_total) as avg_order
-               FROM orders
-               WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
-               GROUP BY DATE(created_at)
-               ORDER BY date"""
-        )
+        cursor.execute("SELECT DATE(created_at) as date, COUNT(*) as orders, SUM(grand_total) as revenue, AVG(grand_total) as avg_order FROM orders WHERE created_at>=CURRENT_DATE-INTERVAL '30 days' GROUP BY DATE(created_at) ORDER BY date")
         daily = cursor.fetchall()
-
-        # Revenue by room
-        cursor.execute(
-            """SELECT r.name as room,
-               COUNT(DISTINCT o.id) as orders,
-               COALESCE(SUM(o.grand_total),0) as revenue
-               FROM rooms r
-               LEFT JOIN products p ON p.room_id = r.id
-               LEFT JOIN order_items oi ON oi.product_id = p.id
-               LEFT JOIN orders o ON o.id = oi.order_id
-               GROUP BY r.name
-               ORDER BY revenue DESC"""
-        )
+        cursor.execute("SELECT r.name as room, COUNT(DISTINCT o.id) as orders, COALESCE(SUM(o.grand_total),0) as revenue FROM rooms r LEFT JOIN products p ON p.room_id=r.id LEFT JOIN order_items oi ON oi.product_id=p.id LEFT JOIN orders o ON o.id=oi.order_id GROUP BY r.name ORDER BY revenue DESC")
         by_room = cursor.fetchall()
-
-        # Orders by status
-        cursor.execute(
-            "SELECT status, COUNT(*) as count FROM orders GROUP BY status"
-        )
+        cursor.execute("SELECT status, COUNT(*) as count FROM orders GROUP BY status")
         by_status = cursor.fetchall()
-
-        # Top selling products
-        cursor.execute(
-            """SELECT p.name, p.brand, r.name as room,
-               SUM(oi.quantity) as total_sold,
-               SUM(oi.quantity * oi.price) as revenue
-               FROM order_items oi
-               JOIN products p ON oi.product_id = p.id
-               JOIN rooms r ON p.room_id = r.id
-               GROUP BY p.name, p.brand, r.name
-               ORDER BY total_sold DESC
-               LIMIT 10"""
-        )
+        cursor.execute("SELECT p.name, p.brand, r.name as room, SUM(oi.quantity) as total_sold, SUM(oi.quantity*oi.price) as revenue FROM order_items oi JOIN products p ON oi.product_id=p.id JOIN rooms r ON p.room_id=r.id GROUP BY p.name,p.brand,r.name ORDER BY total_sold DESC LIMIT 10")
         top_products = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
-
+        cursor.close(); conn.close()
         result_daily = []
         for d in daily:
-            row = dict(d)
-            row["date"]      = str(d["date"])
-            row["revenue"]   = float(d["revenue"] or 0)
-            row["avg_order"] = float(d["avg_order"] or 0)
-            result_daily.append(row)
-
-        return jsonify({
-            "daily_revenue":  result_daily,
-            "by_room":        [{**dict(r),"revenue":float(r["revenue"])} for r in by_room],
-            "by_status":      list(by_status),
-            "top_products":   list(top_products)
-        })
+            row = dict(d); row["date"]=str(d["date"]); row["revenue"]=float(d["revenue"] or 0); row["avg_order"]=float(d["avg_order"] or 0); result_daily.append(row)
+        return jsonify({"daily_revenue":result_daily,"by_room":[{**dict(r),"revenue":float(r["revenue"])} for r in by_room],"by_status":list(by_status),"top_products":list(top_products)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/powerbi/user-data", methods=["GET"])
 def powerbi_user_data():
     try:
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-        # Users by city
-        cursor.execute(
-            """SELECT city, COUNT(*) as count
-               FROM users
-               WHERE city IS NOT NULL AND city != ''
-               GROUP BY city
-               ORDER BY count DESC"""
-        )
+        cursor.execute("SELECT city, COUNT(*) as count FROM users WHERE city IS NOT NULL AND city!='' GROUP BY city ORDER BY count DESC")
         by_city = cursor.fetchall()
-
-        # Users by language
-        cursor.execute(
-            "SELECT language, COUNT(*) as count FROM users GROUP BY language ORDER BY count DESC"
-        )
+        cursor.execute("SELECT language, COUNT(*) as count FROM users GROUP BY language ORDER BY count DESC")
         by_language = cursor.fetchall()
-
-        # User activity summary
-        cursor.execute(
-            """SELECT action, COUNT(*) as count
-               FROM user_activity
-               GROUP BY action
-               ORDER BY count DESC"""
-        )
+        cursor.execute("SELECT action, COUNT(*) as count FROM user_activity GROUP BY action ORDER BY count DESC")
         activity = cursor.fetchall()
-
-        # Page views
-        cursor.execute(
-            """SELECT page, COUNT(*) as views
-               FROM page_views
-               GROUP BY page
-               ORDER BY views DESC"""
-        )
+        cursor.execute("SELECT page, COUNT(*) as views FROM page_views GROUP BY page ORDER BY views DESC")
         page_views = cursor.fetchall()
-
-        # New users per day last 30 days
-        cursor.execute(
-            """SELECT DATE(created_at) as date, COUNT(*) as new_users
-               FROM users
-               WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
-               GROUP BY DATE(created_at)
-               ORDER BY date"""
-        )
-        new_users = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({
-            "by_city":     list(by_city),
-            "by_language": list(by_language),
-            "activity":    list(activity),
-            "page_views":  list(page_views),
-            "new_users":   [{**dict(u),"date":str(u["date"])} for u in new_users]
-        })
+        cursor.close(); conn.close()
+        return jsonify({"by_city":list(by_city),"by_language":list(by_language),"activity":list(activity),"page_views":list(page_views)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/powerbi/product-data", methods=["GET"])
 def powerbi_product_data():
     try:
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-        # Products by room with avg rating
-        cursor.execute(
-            """SELECT r.name as room,
-               COUNT(p.id) as product_count,
-               COALESCE(AVG(pr.rating),0) as avg_rating,
-               COUNT(pr.id) as total_reviews
-               FROM rooms r
-               LEFT JOIN products p ON p.room_id = r.id
-               LEFT JOIN product_reviews pr ON pr.product_id = p.id
-               GROUP BY r.name
-               ORDER BY product_count DESC"""
-        )
+        cursor.execute("SELECT r.name as room, COUNT(p.id) as product_count, COALESCE(AVG(pr.rating),0) as avg_rating, COUNT(pr.id) as total_reviews FROM rooms r LEFT JOIN products p ON p.room_id=r.id LEFT JOIN product_reviews pr ON pr.product_id=p.id GROUP BY r.name ORDER BY product_count DESC")
         by_room = cursor.fetchall()
-
-        # Products by style
-        cursor.execute(
-            """SELECT style_tag, COUNT(*) as count,
-               AVG(price) as avg_price
-               FROM products
-               WHERE style_tag IS NOT NULL
-               GROUP BY style_tag
-               ORDER BY count DESC"""
-        )
+        cursor.execute("SELECT style_tag, COUNT(*) as count, AVG(price) as avg_price FROM products WHERE style_tag IS NOT NULL GROUP BY style_tag ORDER BY count DESC")
         by_style = cursor.fetchall()
-
-        # Price distribution
-        cursor.execute(
-            """SELECT
-               CASE
-                 WHEN price < 1000    THEN 'Under 1K'
-                 WHEN price < 5000    THEN '1K - 5K'
-                 WHEN price < 10000   THEN '5K - 10K'
-                 WHEN price < 50000   THEN '10K - 50K'
-                 ELSE 'Above 50K'
-               END as price_range,
-               COUNT(*) as count
-               FROM products
-               GROUP BY price_range
-               ORDER BY count DESC"""
-        )
+        cursor.execute("SELECT CASE WHEN price<1000 THEN 'Under 1K' WHEN price<5000 THEN '1K-5K' WHEN price<10000 THEN '5K-10K' WHEN price<50000 THEN '10K-50K' ELSE 'Above 50K' END as price_range, COUNT(*) as count FROM products GROUP BY price_range ORDER BY count DESC")
         price_dist = cursor.fetchall()
-
-        # Most wishlisted products
-        cursor.execute(
-            """SELECT p.name, p.brand, r.name as room,
-               COUNT(w.id) as wishlist_count
-               FROM wishlist w
-               JOIN products p ON w.product_id = p.id
-               JOIN rooms r ON p.room_id = r.id
-               GROUP BY p.name, p.brand, r.name
-               ORDER BY wishlist_count DESC
-               LIMIT 10"""
-        )
+        cursor.execute("SELECT p.name, p.brand, r.name as room, COUNT(w.id) as wishlist_count FROM wishlist w JOIN products p ON w.product_id=p.id JOIN rooms r ON p.room_id=r.id GROUP BY p.name,p.brand,r.name ORDER BY wishlist_count DESC LIMIT 10")
         most_wishlisted = cursor.fetchall()
-
-        # Review sentiment
-        cursor.execute(
-            """SELECT
-               CASE
-                 WHEN rating = 5 THEN 'Excellent'
-                 WHEN rating = 4 THEN 'Good'
-                 WHEN rating = 3 THEN 'Average'
-                 WHEN rating = 2 THEN 'Poor'
-                 ELSE 'Bad'
-               END as sentiment,
-               COUNT(*) as count
-               FROM product_reviews
-               GROUP BY sentiment
-               ORDER BY count DESC"""
-        )
+        cursor.execute("SELECT CASE WHEN rating=5 THEN 'Excellent' WHEN rating=4 THEN 'Good' WHEN rating=3 THEN 'Average' WHEN rating=2 THEN 'Poor' ELSE 'Bad' END as sentiment, COUNT(*) as count FROM product_reviews GROUP BY sentiment ORDER BY count DESC")
         review_sentiment = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({
-            "by_room":          [{**dict(r),"avg_rating":float(r["avg_rating"])} for r in by_room],
-            "by_style":         [{**dict(s),"avg_price":float(s["avg_price"] or 0)} for s in by_style],
-            "price_dist":       list(price_dist),
-            "most_wishlisted":  list(most_wishlisted),
-            "review_sentiment": list(review_sentiment)
-        })
+        cursor.close(); conn.close()
+        return jsonify({"by_room":[{**dict(r),"avg_rating":float(r["avg_rating"])} for r in by_room],"by_style":[{**dict(s),"avg_price":float(s["avg_price"] or 0)} for s in by_style],"price_dist":list(price_dist),"most_wishlisted":list(most_wishlisted),"review_sentiment":list(review_sentiment)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/powerbi/export-csv", methods=["GET"])
 def export_csv():
     try:
         import csv
         import io as string_io
-
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
         export_type = request.args.get("type", "orders")
-
         if export_type == "orders":
-            cursor.execute(
-                """SELECT o.id, u.name as customer, u.city,
-                   o.grand_total, o.status,
-                   o.created_at
-                   FROM orders o
-                   JOIN users u ON o.user_id = u.id
-                   ORDER BY o.created_at DESC"""
-            )
+            cursor.execute("SELECT o.id, u.name as customer, u.city, o.grand_total, o.status, o.created_at FROM orders o JOIN users u ON o.user_id=u.id ORDER BY o.created_at DESC")
         elif export_type == "products":
-            cursor.execute(
-                """SELECT p.id, p.name, r.name as room,
-                   p.price, p.brand, p.stock_qty,
-                   p.style_tag, p.material
-                   FROM products p
-                   JOIN rooms r ON p.room_id = r.id
-                   ORDER BY r.name, p.name"""
-            )
+            cursor.execute("SELECT p.id, p.name, r.name as room, p.price, p.brand, p.stock_qty, p.style_tag, p.material FROM products p JOIN rooms r ON p.room_id=r.id ORDER BY r.name, p.name")
         elif export_type == "reviews":
-            cursor.execute(
-                """SELECT pr.id, p.name as product,
-                   u.name as reviewer, pr.rating,
-                   pr.review_text, pr.is_verified,
-                   pr.created_at
-                   FROM product_reviews pr
-                   JOIN products p ON pr.product_id = p.id
-                   JOIN users u ON pr.user_id = u.id
-                   ORDER BY pr.created_at DESC"""
-            )
-
+            cursor.execute("SELECT pr.id, p.name as product, u.name as reviewer, pr.rating, pr.review_text, pr.is_verified, pr.created_at FROM product_reviews pr JOIN products p ON pr.product_id=p.id JOIN users u ON pr.user_id=u.id ORDER BY pr.created_at DESC")
+        else:
+            cursor.execute("SELECT c.code, c.description, c.discount_type, c.discount_value, c.used_count, c.usage_limit, c.valid_until FROM coupons c ORDER BY c.created_at DESC")
         rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
+        cursor.close(); conn.close()
         if not rows:
             return jsonify({"error": "No data found"}), 404
-
         output  = string_io.StringIO()
         writer  = csv.DictWriter(output, fieldnames=rows[0].keys())
         writer.writeheader()
         for row in rows:
             writer.writerow({k: str(v) for k, v in dict(row).items()})
-
         response = make_response(output.getvalue())
         response.headers["Content-Type"]        = "text/csv"
         response.headers["Content-Disposition"] = f"attachment; filename=homebot_{export_type}.csv"
         return response
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)     
+    app.run(debug=True, port=5000)
