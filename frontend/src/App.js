@@ -168,8 +168,11 @@ export default function App() {
   const [couponError, setCouponError]         = useState("");
   const [showCoupons, setShowCoupons]         = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
-  // Day 31 — Recently Viewed
   const [recentlyViewed, setRecentlyViewed]   = useState([]);
+  // Day 32 — Share
+  const [showShareModal, setShowShareModal]   = useState(false);
+  const [shareProduct, setShareProduct]       = useState(null);
+  const [shareCopied, setShareCopied]         = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -205,15 +208,43 @@ export default function App() {
   const loadProductReviews = async (id) => { try { const r=await fetch(`${API}/api/reviews/${id}`); const d=await r.json(); setProductReviews(d); } catch { setProductReviews(null); } };
   const loadProductGallery = async (id) => { try { const r=await fetch(`${API}/api/gallery/${id}`); const d=await r.json(); setProductGallery(d.images||[]); setGalleryIndex(0); } catch { setProductGallery([]); } };
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
+  const loadRecentlyViewed = async () => { if (!user) return; try { const r=await fetch(`${API}/api/recently-viewed/${user.id}`); const d=await r.json(); setRecentlyViewed(d.recently_viewed||[]); } catch {} };
 
-  // Day 31
-  const loadRecentlyViewed = async () => {
-    if (!user) return;
+  // Day 32 — Share function
+  const openShare = async (product) => {
+    setShareProduct(product);
+    setShowShareModal(true);
+    setShareCopied(false);
+    track("share_product", product.room_id, product.id, product.name);
+  };
+
+  const getShareText = (p) => {
+    if (!p) return "";
+    return (
+      `🏠 HomeBot AI — Interior Design\n\n` +
+      `${p.name}\n` +
+      `Room: ${p.room_name||""}\n` +
+      `Brand: ${p.brand||""}\n` +
+      `💰 Price: ₹${Number(p.price).toLocaleString("en-IN")} / ${p.unit||""}\n` +
+      (p.material ? `Material: ${p.material}\n` : "") +
+      (p.color    ? `Color: ${p.color}\n`       : "") +
+      `\n✨ Discover more at HomeBot AI!\nIndia's #1 AI Interior Design App`
+    );
+  };
+
+  const shareOnWhatsApp = (p) => {
+    const text = encodeURIComponent(getShareText(p));
+    window.open(`https://wa.me/?text=${text}`, "_blank");
+  };
+
+  const copyToClipboard = async (p) => {
     try {
-      const r=await fetch(`${API}/api/recently-viewed/${user.id}`);
-      const d=await r.json();
-      setRecentlyViewed(d.recently_viewed||[]);
-    } catch {}
+      await navigator.clipboard.writeText(getShareText(p));
+      setShareCopied(true);
+      setTimeout(()=>setShareCopied(false), 2000);
+    } catch {
+      alert("Copied to clipboard!");
+    }
   };
 
   const loadWishlist = async () => {
@@ -496,11 +527,18 @@ export default function App() {
     );
   };
 
+  const ShareBtn = ({product}) => (
+    <button onClick={e=>{e.stopPropagation();openShare(product);}}
+      style={{background:"#f0f0f0",border:"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#555"}}>
+      📤 Share
+    </button>
+  );
+
   const ProductCard = ({p, saleDiscount=0}) => {
     const salePrice = saleDiscount>0 ? Math.round(p.price*(1-saleDiscount/100)) : null;
     return (
       <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer"}}
-        onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");loadRecentlyViewed();}}>
+        onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");setTimeout(()=>loadRecentlyViewed(),1000);}}>
         <div style={{flexShrink:0,position:"relative"}}>
           {p.image_url?<img src={p.image_url} alt={p.name} style={{width:90,height:90,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/90x90/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:90,height:90,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
           {saleDiscount>0&&<div style={{position:"absolute",top:-4,left:-4,background:"#FF4444",color:"white",borderRadius:6,padding:"2px 5px",fontSize:10,fontWeight:700}}>{saleDiscount}% OFF</div>}
@@ -528,6 +566,60 @@ export default function App() {
           <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
             <button onClick={e=>{e.stopPropagation();addToCart(salePrice?{...p,price:salePrice}:p);}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add to Cart</button>
             <CompareBtn product={p}/>
+            <ShareBtn product={p}/>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Share Modal Component
+  const ShareModal = () => {
+    if (!showShareModal||!shareProduct) return null;
+    const p = shareProduct;
+    return (
+      <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+        <div style={{background:"white",borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:480,paddingBottom:40}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div style={{fontWeight:600,fontSize:16}}>📤 Share Product</div>
+            <button onClick={()=>setShowShareModal(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>✕</button>
+          </div>
+
+          {/* Product Preview */}
+          <div style={{display:"flex",gap:12,background:"#f8f9fa",borderRadius:10,padding:12,marginBottom:20}}>
+            {p.image_url?<img src={p.image_url} alt={p.name} style={{width:60,height:60,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:60,height:60,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>}
+            <div>
+              <div style={{fontWeight:600,fontSize:13}}>{p.name}</div>
+              <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
+              <div style={{color:"#BA7517",fontWeight:700,fontSize:14,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+            </div>
+          </div>
+
+          {/* Share Options */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+            <button onClick={()=>shareOnWhatsApp(p)}
+              style={{background:"#25D366",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <span style={{fontSize:24}}>💬</span>
+              WhatsApp
+            </button>
+            <button onClick={()=>{
+                const text = encodeURIComponent(getShareText(p));
+                window.open(`https://t.me/share/url?text=${text}`, "_blank");
+              }}
+              style={{background:"#0088cc",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <span style={{fontSize:24}}>✈️</span>
+              Telegram
+            </button>
+            <button onClick={()=>copyToClipboard(p)}
+              style={{background:shareCopied?"#085041":"#f0f0f0",color:shareCopied?"white":"#333",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <span style={{fontSize:24}}>{shareCopied?"✅":"📋"}</span>
+              {shareCopied?"Copied!":"Copy"}
+            </button>
+          </div>
+
+          {/* Share Text Preview */}
+          <div style={{background:"#f8f9fa",borderRadius:8,padding:12,fontSize:12,color:"#555",lineHeight:1.6,whiteSpace:"pre-line",maxHeight:120,overflowY:"auto"}}>
+            {getShareText(p)}
           </div>
         </div>
       </div>
@@ -617,6 +709,7 @@ export default function App() {
         </div>
       </div>
       <div style={{padding:16,paddingBottom:80}}>
+        <ShareModal/>
         {saleLoading?<LoadingSpinner/>:saleProducts.map(p=><ProductCard key={p.id} p={p} saleDiscount={p.discount_pct||selectedSale.discount_pct}/>)}
       </div>
     </div>
@@ -639,7 +732,10 @@ export default function App() {
                 {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:120,objectFit:"cover",borderRadius:8}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/200x120/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:120,background:"#FFF3DC",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🏠</div>}
                 <div style={{fontWeight:600,fontSize:13,marginTop:8,lineHeight:1.3}}>{p.name}</div>
                 <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                <button onClick={()=>addToCart(p)} style={{width:"100%",marginTop:8,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 0",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add to Cart</button>
+                <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"center"}}>
+                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Cart</button>
+                  <button onClick={()=>openShare(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12}}>📤</button>
+                </div>
               </div>
             ))}
           </div>
@@ -680,10 +776,14 @@ export default function App() {
                 <div style={{fontSize:24,marginBottom:8}}>🏆</div>
                 <div style={{fontWeight:700,fontSize:15,color:"#BA7517"}}>Our Recommendation</div>
                 <div style={{fontSize:14,color:"#555",marginTop:6}}><strong>{winner.name}</strong> is the better choice!</div>
-                <button onClick={()=>addToCart(winner)} style={{marginTop:12,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Add to Cart</button>
+                <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12}}>
+                  <button onClick={()=>addToCart(winner)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Add to Cart</button>
+                  <button onClick={()=>openShare(winner)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:13}}>📤 Share</button>
+                </div>
               </div>
             );
           })()}
+          <ShareModal/>
         </div>
       )}
     </div>
@@ -700,6 +800,7 @@ export default function App() {
             <div style={{color:"white",fontWeight:600,fontSize:16}}>Product Details</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>openShare(selectedProduct)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:20,padding:"4px 10px",fontSize:12,cursor:"pointer"}}>📤 Share</button>
             <WishlistBtn product={selectedProduct}/>
             <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
           </div>
@@ -731,6 +832,7 @@ export default function App() {
               <button onClick={()=>addToCart(selectedProduct)} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>+ Add to Cart</button>
               <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 18px",fontSize:20,cursor:"pointer"}}>{wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}</button>
               <button onClick={()=>toggleCompare(selectedProduct)} style={{background:compareList.find(p=>p.id===selectedProduct.id)?"#E6F1FB":"#f0f0f0",color:compareList.find(p=>p.id===selectedProduct.id)?"#0C447C":"#555",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>🆚</button>
+              <button onClick={()=>openShare(selectedProduct)} style={{background:"#25D366",color:"white",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>📤</button>
             </div>
           </div>
           {bundles?.bundle_products?.length>0&&(
@@ -788,6 +890,7 @@ export default function App() {
             ))}
           </div>
         </div>
+        <ShareModal/>
         {showGalleryUpload&&(
           <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400}}>
@@ -831,6 +934,7 @@ export default function App() {
 
   return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
+      <ShareModal/>
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -931,7 +1035,6 @@ export default function App() {
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>Select a room to renovate</div>
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Tap a room to see products</div>
-
             {sales.length>0&&(
               <div style={{marginBottom:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:10,color:"#BA7517"}}>🎉 Festival Sales Live Now!</div>
@@ -948,7 +1051,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {ROOMS.map(room=>(
                 <div key={room.id} onClick={()=>{setRoom(room);setScreen("products");track("view_room",room.id,null,room.name);}}
@@ -958,8 +1060,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
-            {/* RECENTLY VIEWED */}
             {recentlyViewed.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#555"}}>👁️ Recently Viewed</div>
@@ -971,13 +1071,15 @@ export default function App() {
                       <div style={{fontSize:11,fontWeight:600,marginTop:6,lineHeight:1.3}}>{p.name}</div>
                       <div style={{fontSize:10,color:"#888",marginTop:2}}>{p.room_name}</div>
                       <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                      <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{width:"100%",marginTop:4,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"3px 0",cursor:"pointer",fontSize:10}}>+ Cart</button>
+                      <div style={{display:"flex",gap:4,marginTop:4}}>
+                        <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"3px 0",cursor:"pointer",fontSize:10}}>+ Cart</button>
+                        <button onClick={e=>{e.stopPropagation();openShare(p);}} style={{background:"#25D366",color:"white",border:"none",borderRadius:6,padding:"3px 6px",cursor:"pointer",fontSize:10}}>📤</button>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-
             {topRated.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>⭐ Top Rated Products</div>
@@ -993,13 +1095,11 @@ export default function App() {
                 </div>
               </div>
             )}
-
             <div style={{background:"white",borderRadius:12,padding:16,marginTop:16}}>
               <div style={{fontWeight:600,marginBottom:8}}>💰 Your Budget</div>
               <input type="range" min={10000} max={500000} step={5000} value={budget} onChange={e=>setBudget(Number(e.target.value))} style={{width:"100%",accentColor:"#BA7517"}}/>
               <div style={{textAlign:"center",fontWeight:600,color:"#BA7517",fontSize:18}}>₹{budget.toLocaleString("en-IN")}</div>
             </div>
-
             {cart.length>0&&(
               <div style={{background:"#FFF3DC",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div><div style={{fontWeight:600,fontSize:14}}>🛒 {cart.length} items in cart</div><div style={{fontSize:13,color:"#BA7517"}}>₹{finalTotal.toLocaleString("en-IN")} total</div></div>
@@ -1019,7 +1119,6 @@ export default function App() {
               <div style={{textAlign:"center",padding:40,color:"#888"}}>
                 <div style={{fontSize:48}}>🤍</div>
                 <div style={{marginTop:12,fontWeight:500,fontSize:15}}>Your wishlist is empty!</div>
-                <div style={{fontSize:13,marginTop:6,color:"#aaa"}}>Tap 🤍 on any product to save it</div>
                 <button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button>
               </div>
             ):(
@@ -1033,16 +1132,15 @@ export default function App() {
                       <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
                       <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
                       <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                      {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}><StarRating rating={Math.round(Number(p.avg_rating))} size={12}/><span style={{fontSize:11,color:"#888"}}>({p.review_count||0})</span></div>}
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
                       <button onClick={()=>toggleWishlist(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22}}>❤️</button>
-                      <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Cart</button>
+                      <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Cart</button>
+                      <button onClick={()=>openShare(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11}}>📤</button>
                     </div>
                   </div>
                 ))}
                 <div style={{background:"#FFF3DC",borderRadius:12,padding:14,textAlign:"center"}}>
-                  <div style={{fontSize:13,color:"#BA7517",fontWeight:500,marginBottom:8}}>Add all wishlist items to cart?</div>
                   <button onClick={()=>{wishlist.forEach(p=>addToCart(p));alert(`✅ ${wishlist.length} items added!`);setScreen("cart");}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>🛒 Add All to Cart</button>
                 </div>
               </>

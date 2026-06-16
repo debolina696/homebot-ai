@@ -1492,6 +1492,54 @@ def get_recently_viewed(user_id):
         return jsonify({"recently_viewed": result[:10]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── SHARE PRODUCT ──
+
+@app.route("/api/share/product/<int:product_id>", methods=["GET"])
+def share_product(product_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT p.*, r.name as room_name
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               WHERE p.id = %s""",
+            (product_id,)
+        )
+        product = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not product:
+            return jsonify({"error": "Product not found"}), 404
+
+        p = dict(product)
+        share_text = (
+            f"🏠 *HomeBot AI — Interior Design*\n\n"
+            f"*{p['name']}*\n"
+            f"Room: {p['room_name']}\n"
+            f"Brand: {p['brand']}\n"
+            f"💰 Price: ₹{int(float(p['price'])):,} / {p['unit']}\n"
+        )
+        if p.get("material"):
+            share_text += f"Material: {p['material']}\n"
+        if p.get("color"):
+            share_text += f"Color: {p['color']}\n"
+        share_text += (
+            f"\n✨ Discover more at HomeBot AI!\n"
+            f"India's #1 AI Interior Design App"
+        )
+
+        return jsonify({
+            "status":      "ok",
+            "product":     p,
+            "share_text":  share_text,
+            "whatsapp_url": f"https://wa.me/?text={share_text}"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
