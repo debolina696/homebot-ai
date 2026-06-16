@@ -1540,6 +1540,56 @@ def share_product(product_id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── EMI CALCULATOR ──
+
+@app.route("/api/emi/calculate", methods=["POST"])
+def calculate_emi():
+    try:
+        data        = request.get_json()
+        principal   = float(data.get("amount", 0))
+        tenure      = int(data.get("tenure_months", 12))
+        annual_rate = float(data.get("annual_rate", 12))
+
+        if principal <= 0:
+            return jsonify({"error": "Invalid amount"}), 400
+
+        monthly_rate = annual_rate / (12 * 100)
+
+        if monthly_rate == 0:
+            emi = principal / tenure
+        else:
+            emi = principal * monthly_rate * ((1 + monthly_rate) ** tenure) / (((1 + monthly_rate) ** tenure) - 1)
+
+        total_payment  = emi * tenure
+        total_interest = total_payment - principal
+
+        # EMI plans
+        plans = []
+        for months in [3, 6, 12, 18, 24]:
+            if monthly_rate == 0:
+                plan_emi = principal / months
+            else:
+                plan_emi = principal * monthly_rate * ((1 + monthly_rate) ** months) / (((1 + monthly_rate) ** months) - 1)
+            plans.append({
+                "months":         months,
+                "emi":            round(plan_emi, 2),
+                "total":          round(plan_emi * months, 2),
+                "total_interest": round((plan_emi * months) - principal, 2),
+                "label":          f"{months} Months"
+            })
+
+        return jsonify({
+            "principal":       principal,
+            "tenure":          tenure,
+            "annual_rate":     annual_rate,
+            "monthly_rate":    round(monthly_rate * 100, 4),
+            "emi":             round(emi, 2),
+            "total_payment":   round(total_payment, 2),
+            "total_interest":  round(total_interest, 2),
+            "plans":           plans
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

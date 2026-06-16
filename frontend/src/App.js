@@ -72,6 +72,147 @@ const CountdownTimer = ({endDate}) => {
   );
 };
 
+// ── EMI CALCULATOR COMPONENT ──
+const EMICalculator = ({price, onClose}) => {
+  const [amount, setAmount]     = useState(price||50000);
+  const [tenure, setTenure]     = useState(12);
+  const [rate, setRate]         = useState(12);
+  const [result, setResult]     = useState(null);
+  const [loading, setLoading]   = useState(false);
+
+  const calculate = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/emi/calculate`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({amount,tenure_months:tenure,annual_rate:rate})
+      });
+      const d = await r.json();
+      setResult(d);
+    } catch(err) { alert("Failed: "+err.message); }
+    setLoading(false);
+  };
+
+  useEffect(() => { calculate(); }, []);
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div style={{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",paddingBottom:30}}>
+        <div style={{padding:"20px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:17}}>💳 EMI Calculator</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+
+        <div style={{padding:"0 20px"}}>
+          {/* Loan Amount */}
+          <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:13,color:"#666"}}>Loan Amount</span>
+              <span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>₹{Number(amount).toLocaleString("en-IN")}</span>
+            </div>
+            <input type="range" min={5000} max={500000} step={1000} value={amount}
+              onChange={e=>{setAmount(Number(e.target.value));}}
+              onMouseUp={calculate} onTouchEnd={calculate}
+              style={{width:"100%",accentColor:"#BA7517"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
+              <span>₹5,000</span><span>₹5,00,000</span>
+            </div>
+          </div>
+
+          {/* Tenure */}
+          <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:13,color:"#666"}}>Tenure</span>
+              <span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>{tenure} Months</span>
+            </div>
+            <input type="range" min={3} max={36} step={3} value={tenure}
+              onChange={e=>{setTenure(Number(e.target.value));}}
+              onMouseUp={calculate} onTouchEnd={calculate}
+              style={{width:"100%",accentColor:"#BA7517"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
+              <span>3 Mo</span><span>36 Mo</span>
+            </div>
+          </div>
+
+          {/* Interest Rate */}
+          <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:13,color:"#666"}}>Interest Rate (Annual)</span>
+              <span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>{rate}%</span>
+            </div>
+            <input type="range" min={0} max={24} step={0.5} value={rate}
+              onChange={e=>{setRate(Number(e.target.value));}}
+              onMouseUp={calculate} onTouchEnd={calculate}
+              style={{width:"100%",accentColor:"#BA7517"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
+              <span>0% (No Cost)</span><span>24%</span>
+            </div>
+          </div>
+
+          <button onClick={calculate} disabled={loading}
+            style={{width:"100%",padding:12,background:"#BA7517",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:"pointer",marginBottom:16}}>
+            {loading?"⏳ Calculating...":"🔄 Calculate EMI"}
+          </button>
+
+          {result&&!result.error&&(
+            <>
+              {/* Result Card */}
+              <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:16,padding:20,marginBottom:16,textAlign:"center",color:"white"}}>
+                <div style={{fontSize:13,opacity:0.85,marginBottom:4}}>Monthly EMI</div>
+                <div style={{fontSize:36,fontWeight:800}}>₹{Number(result.emi).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+                <div style={{fontSize:12,opacity:0.8,marginTop:4}}>per month for {tenure} months</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:16}}>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,opacity:0.8}}>Principal</div>
+                    <div style={{fontWeight:700,fontSize:14}}>₹{Number(result.principal).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,opacity:0.8}}>Total Interest</div>
+                    <div style={{fontWeight:700,fontSize:14}}>₹{Number(result.total_interest).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,opacity:0.8}}>Total Payment</div>
+                    <div style={{fontWeight:700,fontSize:14}}>₹{Number(result.total_payment).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,opacity:0.8}}>Interest Rate</div>
+                    <div style={{fontWeight:700,fontSize:14}}>{rate}% p.a.</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* EMI Plans */}
+              <div style={{background:"white",borderRadius:12,border:"1px solid #eee",overflow:"hidden",marginBottom:16}}>
+                <div style={{background:"#f8f9fa",padding:"10px 16px",fontWeight:600,fontSize:13,color:"#555"}}>📋 Compare EMI Plans</div>
+                {result.plans?.map((plan,i)=>(
+                  <div key={i} onClick={()=>{setTenure(plan.months);calculate();}}
+                    style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"12px 16px",borderBottom:"0.5px solid #f0f0f0",cursor:"pointer",background:tenure===plan.months?"#FFF3DC":"white"}}>
+                    <div style={{fontSize:13,fontWeight:tenure===plan.months?600:400,color:tenure===plan.months?"#BA7517":"#333"}}>{plan.label}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#BA7517",textAlign:"center"}}>₹{Number(plan.emi).toLocaleString("en-IN",{maximumFractionDigits:0})}/mo</div>
+                    <div style={{fontSize:11,color:"#888",textAlign:"right"}}>₹{Number(plan.total_interest).toLocaleString("en-IN",{maximumFractionDigits:0})} int.</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bank Info */}
+              <div style={{background:"#E6F1FB",borderRadius:12,padding:14,marginBottom:8}}>
+                <div style={{fontWeight:600,fontSize:13,color:"#0C447C",marginBottom:8}}>🏦 Available on EMI via</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {["HDFC Bank","ICICI Bank","SBI","Axis Bank","Kotak","Yes Bank"].map(bank=>(
+                    <span key={bank} style={{background:"white",border:"1px solid #ddd",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#555"}}>{bank}</span>
+                  ))}
+                </div>
+                <div style={{fontSize:11,color:"#888",marginTop:8}}>*Subject to bank approval. T&C apply.</div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [screen, setScreen]               = useState("login");
   const [user, setUser]                   = useState(null);
@@ -169,10 +310,12 @@ export default function App() {
   const [showCoupons, setShowCoupons]         = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [recentlyViewed, setRecentlyViewed]   = useState([]);
-  // Day 32 — Share
   const [showShareModal, setShowShareModal]   = useState(false);
   const [shareProduct, setShareProduct]       = useState(null);
   const [shareCopied, setShareCopied]         = useState(false);
+  // Day 33 — EMI
+  const [showEMI, setShowEMI]                 = useState(false);
+  const [emiProduct, setEmiProduct]           = useState(null);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -210,42 +353,10 @@ export default function App() {
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
   const loadRecentlyViewed = async () => { if (!user) return; try { const r=await fetch(`${API}/api/recently-viewed/${user.id}`); const d=await r.json(); setRecentlyViewed(d.recently_viewed||[]); } catch {} };
 
-  // Day 32 — Share function
-  const openShare = async (product) => {
-    setShareProduct(product);
-    setShowShareModal(true);
-    setShareCopied(false);
-    track("share_product", product.room_id, product.id, product.name);
-  };
-
-  const getShareText = (p) => {
-    if (!p) return "";
-    return (
-      `🏠 HomeBot AI — Interior Design\n\n` +
-      `${p.name}\n` +
-      `Room: ${p.room_name||""}\n` +
-      `Brand: ${p.brand||""}\n` +
-      `💰 Price: ₹${Number(p.price).toLocaleString("en-IN")} / ${p.unit||""}\n` +
-      (p.material ? `Material: ${p.material}\n` : "") +
-      (p.color    ? `Color: ${p.color}\n`       : "") +
-      `\n✨ Discover more at HomeBot AI!\nIndia's #1 AI Interior Design App`
-    );
-  };
-
-  const shareOnWhatsApp = (p) => {
-    const text = encodeURIComponent(getShareText(p));
-    window.open(`https://wa.me/?text=${text}`, "_blank");
-  };
-
-  const copyToClipboard = async (p) => {
-    try {
-      await navigator.clipboard.writeText(getShareText(p));
-      setShareCopied(true);
-      setTimeout(()=>setShareCopied(false), 2000);
-    } catch {
-      alert("Copied to clipboard!");
-    }
-  };
+  const openShare = async (product) => { setShareProduct(product); setShowShareModal(true); setShareCopied(false); track("share_product",product.room_id,product.id,product.name); };
+  const getShareText = (p) => { if (!p) return ""; return `🏠 HomeBot AI — Interior Design\n\n${p.name}\nRoom: ${p.room_name||""}\nBrand: ${p.brand||""}\n💰 Price: ₹${Number(p.price).toLocaleString("en-IN")} / ${p.unit||""}\n`+(p.material?`Material: ${p.material}\n`:"")+(p.color?`Color: ${p.color}\n`:"")+`\n✨ Discover more at HomeBot AI!\nIndia's #1 AI Interior Design App`; };
+  const shareOnWhatsApp = (p) => { window.open(`https://wa.me/?text=${encodeURIComponent(getShareText(p))}`, "_blank"); };
+  const copyToClipboard = async (p) => { try { await navigator.clipboard.writeText(getShareText(p)); setShareCopied(true); setTimeout(()=>setShareCopied(false),2000); } catch { alert("Copied!"); } };
 
   const loadWishlist = async () => {
     if (!user) return; setWishlistLoading(true);
@@ -260,190 +371,88 @@ export default function App() {
     if (!user) { alert("Please login!"); return; }
     const isIn = wishlistIds.has(product.id);
     if (isIn) {
-      try {
-        await fetch(`${API}/api/wishlist/${user.id}/${product.id}`,{method:"DELETE"});
-        setWishlistIds(prev=>{const n=new Set(prev);n.delete(product.id);return n;});
-        setWishlist(prev=>prev.filter(i=>i.id!==product.id));
-      } catch(err) { alert("Failed: "+err.message); }
+      try { await fetch(`${API}/api/wishlist/${user.id}/${product.id}`,{method:"DELETE"}); setWishlistIds(prev=>{const n=new Set(prev);n.delete(product.id);return n;}); setWishlist(prev=>prev.filter(i=>i.id!==product.id)); } catch(err) { alert("Failed: "+err.message); }
     } else {
-      try {
-        const r=await fetch(`${API}/api/wishlist`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user.id,product_id:product.id})});
-        const d=await r.json();
-        if (d.status==="ok"||d.status==="exists") { setWishlistIds(prev=>new Set([...prev,product.id])); setWishlist(prev=>[...prev,{...product}]); }
-      } catch(err) { alert("Failed: "+err.message); }
+      try { const r=await fetch(`${API}/api/wishlist`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user.id,product_id:product.id})}); const d=await r.json(); if (d.status==="ok"||d.status==="exists") { setWishlistIds(prev=>new Set([...prev,product.id])); setWishlist(prev=>[...prev,{...product}]); } } catch(err) { alert("Failed: "+err.message); }
     }
   };
 
   const toggleCompare = (product) => {
     const exists = compareList.find(p=>p.id===product.id);
     if (exists) { setCompareList(prev=>prev.filter(p=>p.id!==product.id)); }
-    else {
-      if (compareList.length>=2) { alert("Maximum 2 products to compare!"); return; }
-      setCompareList(prev=>[...prev,product]);
-    }
+    else { if (compareList.length>=2) { alert("Maximum 2 products!"); return; } setCompareList(prev=>[...prev,product]); }
   };
 
   const startCompare = async () => {
     if (compareList.length<2) { alert("Select 2 products!"); return; }
     setCompareLoading(true);
-    try {
-      const r=await fetch(`${API}/api/compare`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_ids:compareList.map(p=>p.id)})});
-      const d=await r.json(); setCompareData(d.products||[]); setScreen("compare");
-    } catch(err) { alert("Failed: "+err.message); }
+    try { const r=await fetch(`${API}/api/compare`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_ids:compareList.map(p=>p.id)})}); const d=await r.json(); setCompareData(d.products||[]); setScreen("compare"); } catch(err) { alert("Failed: "+err.message); }
     setCompareLoading(false);
   };
 
-  const loadSaleProducts = async (sale) => {
-    setSelectedSale(sale); setSaleLoading(true);
-    try { const r=await fetch(`${API}/api/sales/${sale.id}/products`); const d=await r.json(); setSaleProducts(d.products||[]); setScreen("sale_detail"); } catch {}
-    setSaleLoading(false);
-  };
-
-  const loadOrders = async () => {
-    if (!user) return; setOrdersLoading(true);
-    try { const r=await fetch(`${API}/api/orders/${user.id}`); const d=await r.json(); setOrders(d.orders||[]); } catch { setOrders([]); }
-    setOrdersLoading(false);
-  };
+  const loadSaleProducts = async (sale) => { setSelectedSale(sale); setSaleLoading(true); try { const r=await fetch(`${API}/api/sales/${sale.id}/products`); const d=await r.json(); setSaleProducts(d.products||[]); setScreen("sale_detail"); } catch {} setSaleLoading(false); };
+  const loadOrders = async () => { if (!user) return; setOrdersLoading(true); try { const r=await fetch(`${API}/api/orders/${user.id}`); const d=await r.json(); setOrders(d.orders||[]); } catch { setOrders([]); } setOrdersLoading(false); };
 
   const loadProfile = async () => {
     if (!user) return; setProfileLoading(true);
-    try {
-      const r=await fetch(`${API}/api/profile/${user.id}`); const d=await r.json(); setProfile(d);
-      setEditName(d.user.name); setEditPhone(d.user.phone||""); setEditCity(d.user.city||""); setEditLang(d.user.language||"english");
-    } catch { setProfile(null); }
+    try { const r=await fetch(`${API}/api/profile/${user.id}`); const d=await r.json(); setProfile(d); setEditName(d.user.name); setEditPhone(d.user.phone||""); setEditCity(d.user.city||""); setEditLang(d.user.language||"english"); } catch { setProfile(null); }
     setProfileLoading(false);
   };
 
   const loadStyleProfile = async () => {
-    try {
-      const r=await fetch(`${API}/api/personalization/${user?.id||1}`); const d=await r.json(); setStyleProfile(d);
-      if (d.profile) { setStylePref(d.profile.favorite_style||"modern"); setBudgetPref(d.profile.budget_range||"medium"); setColorPref(d.profile.color_pref||""); setMaterialPref(d.profile.material_pref||""); }
-    } catch {}
+    try { const r=await fetch(`${API}/api/personalization/${user?.id||1}`); const d=await r.json(); setStyleProfile(d); if (d.profile) { setStylePref(d.profile.favorite_style||"modern"); setBudgetPref(d.profile.budget_range||"medium"); setColorPref(d.profile.color_pref||""); setMaterialPref(d.profile.material_pref||""); } } catch {}
   };
 
   const saveStyleProfile = async () => {
-    try {
-      const r=await fetch(`${API}/api/personalization/${user?.id||1}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({favorite_style:stylePref,budget_range:budgetPref,color_pref:colorPref,material_pref:materialPref})});
-      const d=await r.json();
-      if (d.status==="ok") { alert("✅ Style profile saved!"); setShowStyleSetup(false); loadStyleProfile(); }
-    } catch(err) { alert("Failed: "+err.message); }
+    try { const r=await fetch(`${API}/api/personalization/${user?.id||1}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({favorite_style:stylePref,budget_range:budgetPref,color_pref:colorPref,material_pref:materialPref})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Saved!"); setShowStyleSetup(false); loadStyleProfile(); } } catch(err) { alert("Failed: "+err.message); }
   };
 
-  const loadAllProducts = async () => { try { const r=await fetch(`${API}/api/search?q=`); const d=await r.json(); setAllProducts(d.products||[]); } catch { setAllProducts([]); } };
-
-  const loadRecommendations = async () => {
-    setRecLoading(true);
-    try { const r=await fetch(`${API}/api/recommendations/user/${user?.id||1}`); const d=await r.json(); setRecommendations(d.recommendations||[]); } catch { setRecommendations([]); }
-    try { const r=await fetch(`${API}/api/trending`); const d=await r.json(); setTrending(d.trending||[]); } catch { setTrending([]); }
-    setRecLoading(false);
-  };
+  const loadAllProducts    = async () => { try { const r=await fetch(`${API}/api/search?q=`); const d=await r.json(); setAllProducts(d.products||[]); } catch { setAllProducts([]); } };
+  const loadRecommendations = async () => { setRecLoading(true); try { const r=await fetch(`${API}/api/recommendations/user/${user?.id||1}`); const d=await r.json(); setRecommendations(d.recommendations||[]); } catch { setRecommendations([]); } try { const r=await fetch(`${API}/api/trending`); const d=await r.json(); setTrending(d.trending||[]); } catch { setTrending([]); } setRecLoading(false); };
 
   const uploadGalleryImage = async (productId) => {
-    if (!galleryFile) { alert("Select an image!"); return; }
-    setGalleryUploading(true);
-    try {
-      const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery");
-      const r=await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d=await r.json();
-      if (d.status==="ok") { alert("✅ Added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); }
-      else alert("Error: "+d.error);
-    } catch(err) { alert("Failed: "+err.message); }
+    if (!galleryFile) { alert("Select an image!"); return; } setGalleryUploading(true);
+    try { const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery"); const r=await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { alert("✅ Added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); } else alert("Error: "+d.error); } catch(err) { alert("Failed: "+err.message); }
     setGalleryUploading(false);
   };
 
   const submitReview = async () => {
-    if (!selectedProduct) return;
-    let photoUrl="";
-    if (reviewPhoto) {
-      try {
-        const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`);
-        const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json();
-        if (d.status==="ok") photoUrl=d.image_url;
-      } catch {}
-    }
-    try {
-      const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})});
-      const d=await r.json();
-      if (d.status==="ok") { alert(d.is_verified?"✅ Verified!":"✅ Review submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); }
-    } catch(err) { alert("Failed: "+err.message); }
+    if (!selectedProduct) return; let photoUrl="";
+    if (reviewPhoto) { try { const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") photoUrl=d.image_url; } catch {} }
+    try { const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})}); const d=await r.json(); if (d.status==="ok") { alert(d.is_verified?"✅ Verified!":"✅ Submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); } } catch(err) { alert("Failed: "+err.message); }
   };
 
   const submitChatbotRating = async () => {
-    try {
-      const r=await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})});
-      const d=await r.json();
-      if (d.status==="ok") { alert("✅ Thank you!"); setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0); }
-    } catch(err) { alert("Failed: "+err.message); }
+    try { const r=await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Thank you!"); setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0); } } catch(err) { alert("Failed: "+err.message); }
   };
 
   const uploadImage = async () => {
-    if (!uploadFile||!uploadProductId) { alert("Select product and image!"); return; }
-    setUploadLoading(true);
-    try {
-      const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId);
-      const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json();
-      if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Uploaded!"); } else alert("Error: "+d.error);
-    } catch(err) { alert("Upload failed: "+err.message); }
+    if (!uploadFile||!uploadProductId) { alert("Select product and image!"); return; } setUploadLoading(true);
+    try { const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Uploaded!"); } else alert("Error: "+d.error); } catch(err) { alert("Upload failed: "+err.message); }
     setUploadLoading(false);
   };
 
-  const trackOrderFn = async (orderId) => {
-    setTrackLoading(true);
-    try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track"); }
-    setTrackLoading(false);
-  };
-
-  const saveProfile = async () => {
-    try {
-      const r=await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})});
-      const d=await r.json();
-      if (d.status==="ok") { alert("✅ Updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); }
-    } catch(err) { alert("Failed: "+err.message); }
-  };
+  const trackOrderFn = async (orderId) => { setTrackLoading(true); try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track"); } setTrackLoading(false); };
+  const saveProfile = async () => { try { const r=await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); } } catch(err) { alert("Failed: "+err.message); } };
 
   const validateCoupon = async () => {
-    if (!couponCode.trim()) { setCouponError("Enter a coupon code!"); return; }
-    setCouponLoading(true); setCouponError("");
-    try {
-      const r=await fetch(`${API}/api/coupons/validate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:couponCode.toUpperCase(),user_id:user?.id||1,order_total:subtotal})});
-      const d=await r.json();
-      if (d.valid) { setCouponData(d); setCouponError(""); }
-      else { setCouponData(null); setCouponError(d.message||"Invalid coupon"); }
-    } catch(err) { setCouponError("Failed: "+err.message); }
+    if (!couponCode.trim()) { setCouponError("Enter a coupon code!"); return; } setCouponLoading(true); setCouponError("");
+    try { const r=await fetch(`${API}/api/coupons/validate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:couponCode.toUpperCase(),user_id:user?.id||1,order_total:subtotal})}); const d=await r.json(); if (d.valid) { setCouponData(d); setCouponError(""); } else { setCouponData(null); setCouponError(d.message||"Invalid coupon"); } } catch(err) { setCouponError("Failed: "+err.message); }
     setCouponLoading(false);
   };
 
-  const loadAvailableCoupons = async () => {
-    try { const r=await fetch(`${API}/api/coupons`); const d=await r.json(); setAvailableCoupons(d.coupons||[]); } catch {}
-  };
-
+  const loadAvailableCoupons = async () => { try { const r=await fetch(`${API}/api/coupons`); const d=await r.json(); setAvailableCoupons(d.coupons||[]); } catch {} };
   const removeCoupon = () => { setCouponData(null); setCouponCode(""); setCouponError(""); };
 
   const placeOrder = async () => {
-    if (cart.length===0) { alert("Cart is empty!"); return; }
-    setOrderPlacing(true);
-    try {
-      const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        user_id:         user?.id||1,
-        items:           cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),
-        room:            selectedRoom?.name||"Home",
-        coupon_id:       couponData?.coupon_id||null,
-        coupon_discount: couponData?.discount||0
-      })});
-      const d=await r.json();
-      if (d.status==="ok") { setOrderSuccess(d); setCart([]); setCouponData(null); setCouponCode(""); track("place_order",null,null,`Order #${d.order_id}`); }
-      else alert("Order failed: "+d.error);
-    } catch(err) { alert("Failed: "+err.message); }
+    if (cart.length===0) { alert("Cart is empty!"); return; } setOrderPlacing(true);
+    try { const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home",coupon_id:couponData?.coupon_id||null,coupon_discount:couponData?.discount||0})}); const d=await r.json(); if (d.status==="ok") { setOrderSuccess(d); setCart([]); setCouponData(null); setCouponCode(""); track("place_order",null,null,`Order #${d.order_id}`); } else alert("Order failed: "+d.error); } catch(err) { alert("Failed: "+err.message); }
     setOrderPlacing(false);
   };
 
   const handleSearch = async () => {
-    setSearching(true);
-    let url=`${API}/api/search?q=${searchQuery}`;
-    if (filterRoom)  url+=`&room_id=${filterRoom}`;
-    if (filterMin)   url+=`&min_price=${filterMin}`;
-    if (filterMax)   url+=`&max_price=${filterMax}`;
-    if (filterStyle) url+=`&style=${filterStyle}`;
-    if (filterBrand) url+=`&brand=${filterBrand}`;
+    setSearching(true); let url=`${API}/api/search?q=${searchQuery}`;
+    if (filterRoom) url+=`&room_id=${filterRoom}`; if (filterMin) url+=`&min_price=${filterMin}`; if (filterMax) url+=`&max_price=${filterMax}`; if (filterStyle) url+=`&style=${filterStyle}`; if (filterBrand) url+=`&brand=${filterBrand}`;
     try { const r=await fetch(url); const d=await r.json(); setSearchResults(d.products||[]); track("search",null,null,searchQuery); } catch { setSearchResults([]); }
     setSearching(false);
   };
@@ -457,54 +466,30 @@ export default function App() {
   const finalTotal = Math.max(0, grandTotal-(couponData?.discount||0));
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
-    const userMsg=input; setInput("");
+    if (!input.trim()) return; const userMsg=input; setInput("");
     setMessages(m=>[...m,{role:"user",text:userMsg}]); setLoading(true); track("chat_message",null,null,userMsg);
-    try {
-      const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`;
-      const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})});
-      const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply);
-      setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]);
-      setTimeout(()=>setShowChatbotRating(true),3000);
-    } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); }
+    try { const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`; const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})}); const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply); setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]); setTimeout(()=>setShowChatbotRating(true),3000); } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); }
     setLoading(false);
   };
 
   const downloadPDF = async () => {
     if (cart.length===0) { alert("Add products first!"); return; } setPdfLoading(true);
-    try {
-      const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})});
-      if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; }
-      const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"}));
-      const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf";
-      document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100);
-    } catch(err) { alert("PDF failed: "+err.message); }
+    try { const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})}); if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; } const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"})); const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100); } catch(err) { alert("PDF failed: "+err.message); }
     setPdfLoading(false);
   };
 
   const sendWhatsApp = async () => {
     const phone=prompt("Enter WhatsApp number:\nExample: +919876543210"); if (!phone) return;
-    try {
-      const r=await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:finalTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})});
-      const d=await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error);
-    } catch(err) { alert("Failed: "+err.message); }
+    try { const r=await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:finalTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})}); const d=await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error); } catch(err) { alert("Failed: "+err.message); }
   };
 
   const handleLogin = async () => {
     setLoginError("");
-    try {
-      const r=await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})});
-      const d=await r.json();
-      if (d.status==="ok") { setUser(d.user); setScreen("home"); track("login",null,null,d.user.name); } else setLoginError(d.message||"Login failed");
-    } catch { setLoginError("Connection error."); }
+    try { const r=await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})}); const d=await r.json(); if (d.status==="ok") { setUser(d.user); setScreen("home"); track("login",null,null,d.user.name); } else setLoginError(d.message||"Login failed"); } catch { setLoginError("Connection error."); }
   };
 
   const handleRegister = async () => {
-    try {
-      const r=await fetch(`${API}/api/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:regName,email:regEmail,password:regPassword,phone:regPhone,city:regCity,language:"english"})});
-      const d=await r.json();
-      if (d.status==="ok") { alert("✅ Registered! Please login."); setShowRegister(false); } else alert("Error: "+d.error);
-    } catch(err) { alert("Failed: "+err.message); }
+    try { const r=await fetch(`${API}/api/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:regName,email:regEmail,password:regPassword,phone:regPhone,city:regCity,language:"english"})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Registered! Please login."); setShowRegister(false); } else alert("Error: "+d.error); } catch(err) { alert("Failed: "+err.message); }
   };
 
   const S = {
@@ -512,27 +497,10 @@ export default function App() {
     select: {width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",background:"white",boxSizing:"border-box"}
   };
 
-  const WishlistBtn = ({product}) => {
-    const isW = wishlistIds.has(product.id);
-    return <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4}}>{isW?"❤️":"🤍"}</button>;
-  };
-
-  const CompareBtn = ({product}) => {
-    const isC = compareList.find(p=>p.id===product.id);
-    return (
-      <button onClick={e=>{e.stopPropagation();toggleCompare(product);}}
-        style={{background:isC?"#E6F1FB":"#f0f0f0",border:isC?"1px solid #0C447C":"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:isC?"#0C447C":"#555",fontWeight:isC?600:400}}>
-        {isC?"✓ Compare":"⊕ Compare"}
-      </button>
-    );
-  };
-
-  const ShareBtn = ({product}) => (
-    <button onClick={e=>{e.stopPropagation();openShare(product);}}
-      style={{background:"#f0f0f0",border:"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#555"}}>
-      📤 Share
-    </button>
-  );
+  const WishlistBtn = ({product}) => { const isW=wishlistIds.has(product.id); return <button onClick={e=>{e.stopPropagation();toggleWishlist(product);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,padding:4}}>{isW?"❤️":"🤍"}</button>; };
+  const CompareBtn  = ({product}) => { const isC=compareList.find(p=>p.id===product.id); return <button onClick={e=>{e.stopPropagation();toggleCompare(product);}} style={{background:isC?"#E6F1FB":"#f0f0f0",border:isC?"1px solid #0C447C":"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:isC?"#0C447C":"#555",fontWeight:isC?600:400}}>{isC?"✓ Compare":"⊕ Compare"}</button>; };
+  const ShareBtn    = ({product}) => <button onClick={e=>{e.stopPropagation();openShare(product);}} style={{background:"#f0f0f0",border:"1px solid #ddd",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#555"}}>📤 Share</button>;
+  const EMIBtn      = ({product}) => <button onClick={e=>{e.stopPropagation();setEmiProduct(product);setShowEMI(true);}} style={{background:"#E6F1FB",border:"1px solid #0C447C",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#0C447C",fontWeight:500}}>💳 EMI</button>;
 
   const ProductCard = ({p, saleDiscount=0}) => {
     const salePrice = saleDiscount>0 ? Math.round(p.price*(1-saleDiscount/100)) : null;
@@ -565,6 +533,7 @@ export default function App() {
           <div style={{fontSize:11,color:"#666",marginTop:4}}>Brand: <strong>{p.brand}</strong>{p.room_name&&<span style={{color:"#BA7517"}}> | {p.room_name}</span>}</div>
           <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
             <button onClick={e=>{e.stopPropagation();addToCart(salePrice?{...p,price:salePrice}:p);}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add to Cart</button>
+            <EMIBtn product={p}/>
             <CompareBtn product={p}/>
             <ShareBtn product={p}/>
           </div>
@@ -573,7 +542,6 @@ export default function App() {
     );
   };
 
-  // Share Modal Component
   const ShareModal = () => {
     if (!showShareModal||!shareProduct) return null;
     const p = shareProduct;
@@ -584,43 +552,16 @@ export default function App() {
             <div style={{fontWeight:600,fontSize:16}}>📤 Share Product</div>
             <button onClick={()=>setShowShareModal(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>✕</button>
           </div>
-
-          {/* Product Preview */}
           <div style={{display:"flex",gap:12,background:"#f8f9fa",borderRadius:10,padding:12,marginBottom:20}}>
             {p.image_url?<img src={p.image_url} alt={p.name} style={{width:60,height:60,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:60,height:60,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>}
-            <div>
-              <div style={{fontWeight:600,fontSize:13}}>{p.name}</div>
-              <div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div>
-              <div style={{color:"#BA7517",fontWeight:700,fontSize:14,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-            </div>
+            <div><div style={{fontWeight:600,fontSize:13}}>{p.name}</div><div style={{fontSize:12,color:"#888",marginTop:2}}>{p.room_name}</div><div style={{color:"#BA7517",fontWeight:700,fontSize:14,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div></div>
           </div>
-
-          {/* Share Options */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
-            <button onClick={()=>shareOnWhatsApp(p)}
-              style={{background:"#25D366",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-              <span style={{fontSize:24}}>💬</span>
-              WhatsApp
-            </button>
-            <button onClick={()=>{
-                const text = encodeURIComponent(getShareText(p));
-                window.open(`https://t.me/share/url?text=${text}`, "_blank");
-              }}
-              style={{background:"#0088cc",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-              <span style={{fontSize:24}}>✈️</span>
-              Telegram
-            </button>
-            <button onClick={()=>copyToClipboard(p)}
-              style={{background:shareCopied?"#085041":"#f0f0f0",color:shareCopied?"white":"#333",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-              <span style={{fontSize:24}}>{shareCopied?"✅":"📋"}</span>
-              {shareCopied?"Copied!":"Copy"}
-            </button>
+            <button onClick={()=>shareOnWhatsApp(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><span style={{fontSize:24}}>💬</span>WhatsApp</button>
+            <button onClick={()=>window.open(`https://t.me/share/url?text=${encodeURIComponent(getShareText(p))}`,"_blank")} style={{background:"#0088cc",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><span style={{fontSize:24}}>✈️</span>Telegram</button>
+            <button onClick={()=>copyToClipboard(p)} style={{background:shareCopied?"#085041":"#f0f0f0",color:shareCopied?"white":"#333",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><span style={{fontSize:24}}>{shareCopied?"✅":"📋"}</span>{shareCopied?"Copied!":"Copy"}</button>
           </div>
-
-          {/* Share Text Preview */}
-          <div style={{background:"#f8f9fa",borderRadius:8,padding:12,fontSize:12,color:"#555",lineHeight:1.6,whiteSpace:"pre-line",maxHeight:120,overflowY:"auto"}}>
-            {getShareText(p)}
-          </div>
+          <div style={{background:"#f8f9fa",borderRadius:8,padding:12,fontSize:12,color:"#555",lineHeight:1.6,whiteSpace:"pre-line",maxHeight:120,overflowY:"auto"}}>{getShareText(p)}</div>
         </div>
       </div>
     );
@@ -710,6 +651,7 @@ export default function App() {
       </div>
       <div style={{padding:16,paddingBottom:80}}>
         <ShareModal/>
+        {showEMI&&<EMICalculator price={emiProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
         {saleLoading?<LoadingSpinner/>:saleProducts.map(p=><ProductCard key={p.id} p={p} saleDiscount={p.discount_pct||selectedSale.discount_pct}/>)}
       </div>
     </div>
@@ -732,9 +674,10 @@ export default function App() {
                 {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:120,objectFit:"cover",borderRadius:8}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/200x120/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:120,background:"#FFF3DC",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>🏠</div>}
                 <div style={{fontWeight:600,fontSize:13,marginTop:8,lineHeight:1.3}}>{p.name}</div>
                 <div style={{color:"#BA7517",fontWeight:700,fontSize:15,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"center"}}>
-                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Cart</button>
-                  <button onClick={()=>openShare(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12}}>📤</button>
+                <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"center",flexWrap:"wrap"}}>
+                  <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Cart</button>
+                  <button onClick={()=>{setEmiProduct(p);setShowEMI(true);}} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:11}}>💳</button>
+                  <button onClick={()=>openShare(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:11}}>📤</button>
                 </div>
               </div>
             ))}
@@ -777,13 +720,15 @@ export default function App() {
                 <div style={{fontWeight:700,fontSize:15,color:"#BA7517"}}>Our Recommendation</div>
                 <div style={{fontSize:14,color:"#555",marginTop:6}}><strong>{winner.name}</strong> is the better choice!</div>
                 <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12}}>
-                  <button onClick={()=>addToCart(winner)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Add to Cart</button>
-                  <button onClick={()=>openShare(winner)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:13}}>📤 Share</button>
+                  <button onClick={()=>addToCart(winner)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 20px",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Cart</button>
+                  <button onClick={()=>{setEmiProduct(winner);setShowEMI(true);}} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:8,padding:"10px 14px",cursor:"pointer",fontSize:13,fontWeight:600}}>💳 EMI</button>
+                  <button onClick={()=>openShare(winner)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"10px 14px",cursor:"pointer",fontSize:13}}>📤</button>
                 </div>
               </div>
             );
           })()}
           <ShareModal/>
+          {showEMI&&<EMICalculator price={emiProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
         </div>
       )}
     </div>
@@ -800,7 +745,8 @@ export default function App() {
             <div style={{color:"white",fontWeight:600,fontSize:16}}>Product Details</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={()=>openShare(selectedProduct)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:20,padding:"4px 10px",fontSize:12,cursor:"pointer"}}>📤 Share</button>
+            <button onClick={()=>{setEmiProduct(selectedProduct);setShowEMI(true);}} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:20,padding:"4px 10px",fontSize:12,cursor:"pointer"}}>💳 EMI</button>
+            <button onClick={()=>openShare(selectedProduct)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:20,padding:"4px 10px",fontSize:12,cursor:"pointer"}}>📤</button>
             <WishlistBtn product={selectedProduct}/>
             <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer"}} onClick={()=>setScreen("cart")}>🛒 {cart.length}</div>
           </div>
@@ -815,6 +761,7 @@ export default function App() {
             </div>
             {productGallery.length>1?(<div style={{display:"flex",gap:8,padding:12,overflowX:"auto"}}>{productGallery.map((img,i)=>(<img key={i} src={img.image_url} alt={`view ${i+1}`} onClick={()=>setGalleryIndex(i)} style={{width:60,height:60,borderRadius:6,objectFit:"cover",cursor:"pointer",flexShrink:0,border:i===galleryIndex?"2px solid #BA7517":"2px solid transparent",opacity:i===galleryIndex?1:0.7}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>))}<div onClick={()=>setShowGalleryUpload(true)} style={{width:60,height:60,borderRadius:6,border:"2px dashed #BA7517",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#BA7517",fontSize:24}}>+</div></div>):(<div style={{padding:"8px 12px",textAlign:"center"}}><button onClick={()=>setShowGalleryUpload(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px dashed #BA7517",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12}}>📷 Add More Photos</button></div>)}
           </div>
+
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{fontWeight:700,fontSize:18,flex:1}}>{selectedProduct.name}</div>
@@ -822,6 +769,13 @@ export default function App() {
             </div>
             <div style={{fontSize:13,color:"#888",marginTop:4}}>{selectedProduct.description}</div>
             <div style={{color:"#BA7517",fontWeight:700,fontSize:24,marginTop:8}}>₹{Number(selectedProduct.price).toLocaleString("en-IN")}<span style={{fontSize:13,color:"#888",fontWeight:400}}> / {selectedProduct.unit}</span></div>
+
+            {/* EMI Quick Info */}
+            <div style={{background:"#E6F1FB",borderRadius:8,padding:"8px 12px",marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>{setEmiProduct(selectedProduct);setShowEMI(true);}}>
+              <span style={{fontSize:13,color:"#0C447C"}}>💳 EMI from ₹{Math.round(Number(selectedProduct.price)*1.12/12).toLocaleString("en-IN")}/month</span>
+              <span style={{fontSize:12,color:"#0C447C",fontWeight:600}}>Calculate →</span>
+            </div>
+
             {total>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}><StarRating rating={Math.round(avg)} size={18}/><span style={{fontSize:14,fontWeight:600}}>{Number(avg).toFixed(1)}</span><span style={{fontSize:13,color:"#888"}}>({total} reviews)</span></div>}
             <div style={{marginTop:12}}>
               {[{label:"Brand",value:selectedProduct.brand},{label:"Material",value:selectedProduct.material},{label:"Color",value:selectedProduct.color},{label:"Stock",value:selectedProduct.stock_qty?`${selectedProduct.stock_qty} units`:null},selectedProduct.length_cm&&{label:"Size",value:`${selectedProduct.length_cm}×${selectedProduct.width_cm}×${selectedProduct.height_cm} cm`}].filter(s=>s&&s.value).map((spec,i)=>(
@@ -830,11 +784,12 @@ export default function App() {
             </div>
             <div style={{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}}>
               <button onClick={()=>addToCart(selectedProduct)} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>+ Add to Cart</button>
-              <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 18px",fontSize:20,cursor:"pointer"}}>{wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}</button>
-              <button onClick={()=>toggleCompare(selectedProduct)} style={{background:compareList.find(p=>p.id===selectedProduct.id)?"#E6F1FB":"#f0f0f0",color:compareList.find(p=>p.id===selectedProduct.id)?"#0C447C":"#555",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>🆚</button>
-              <button onClick={()=>openShare(selectedProduct)} style={{background:"#25D366",color:"white",border:"none",borderRadius:10,padding:"14px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>📤</button>
+              <button onClick={()=>toggleWishlist(selectedProduct)} style={{background:wishlistIds.has(selectedProduct.id)?"#FCEBEB":"#f0f0f0",color:wishlistIds.has(selectedProduct.id)?"#c00":"#555",border:"none",borderRadius:10,padding:"14px 16px",fontSize:20,cursor:"pointer"}}>{wishlistIds.has(selectedProduct.id)?"❤️":"🤍"}</button>
+              <button onClick={()=>toggleCompare(selectedProduct)} style={{background:compareList.find(p=>p.id===selectedProduct.id)?"#E6F1FB":"#f0f0f0",color:compareList.find(p=>p.id===selectedProduct.id)?"#0C447C":"#555",border:"none",borderRadius:10,padding:"14px 12px",fontSize:13,cursor:"pointer",fontWeight:600}}>🆚</button>
+              <button onClick={()=>openShare(selectedProduct)} style={{background:"#25D366",color:"white",border:"none",borderRadius:10,padding:"14px 12px",fontSize:13,cursor:"pointer",fontWeight:600}}>📤</button>
             </div>
           </div>
+
           {bundles?.bundle_products?.length>0&&(
             <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
               <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>🛍️ Complete the Look</div>
@@ -850,6 +805,7 @@ export default function App() {
               </div>
             </div>
           )}
+
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontWeight:600,fontSize:15}}>⭐ Customer Reviews</div>
@@ -891,6 +847,7 @@ export default function App() {
           </div>
         </div>
         <ShareModal/>
+        {showEMI&&<EMICalculator price={emiProduct?.price||selectedProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
         {showGalleryUpload&&(
           <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{background:"white",borderRadius:16,padding:24,width:"90%",maxWidth:400}}>
@@ -935,6 +892,8 @@ export default function App() {
   return (
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <ShareModal/>
+      {showEMI&&<EMICalculator price={emiProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
+
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -1073,7 +1032,7 @@ export default function App() {
                       <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
                       <div style={{display:"flex",gap:4,marginTop:4}}>
                         <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"3px 0",cursor:"pointer",fontSize:10}}>+ Cart</button>
-                        <button onClick={e=>{e.stopPropagation();openShare(p);}} style={{background:"#25D366",color:"white",border:"none",borderRadius:6,padding:"3px 6px",cursor:"pointer",fontSize:10}}>📤</button>
+                        <button onClick={e=>{e.stopPropagation();setEmiProduct(p);setShowEMI(true);}} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:6,padding:"3px 5px",cursor:"pointer",fontSize:10}}>💳</button>
                       </div>
                     </div>
                   ))}
@@ -1136,7 +1095,8 @@ export default function App() {
                     <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
                       <button onClick={()=>toggleWishlist(p)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22}}>❤️</button>
                       <button onClick={()=>addToCart(p)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Cart</button>
-                      <button onClick={()=>openShare(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11}}>📤</button>
+                      <button onClick={()=>{setEmiProduct(p);setShowEMI(true);}} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:11}}>💳 EMI</button>
+                      <button onClick={()=>openShare(p)} style={{background:"#25D366",color:"white",border:"none",borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:11}}>📤</button>
                     </div>
                   </div>
                 ))}
@@ -1230,8 +1190,7 @@ export default function App() {
                     <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#555"}}>👁️ Recently Viewed</div>
                     <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
                       {recentlyViewed.map(p=>(
-                        <div key={p.id} style={{flexShrink:0,width:130,background:"white",borderRadius:10,padding:10,cursor:"pointer",border:"1px solid #eee"}}
-                          onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                        <div key={p.id} style={{flexShrink:0,width:130,background:"white",borderRadius:10,padding:10,cursor:"pointer",border:"1px solid #eee"}} onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
                           {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:80,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/130x80/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:80,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>}
                           <div style={{fontSize:11,fontWeight:600,marginTop:6,lineHeight:1.3}}>{p.name}</div>
                           <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
