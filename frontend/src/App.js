@@ -74,27 +74,22 @@ const CountdownTimer = ({endDate}) => {
 
 // ── EMI CALCULATOR COMPONENT ──
 const EMICalculator = ({price, onClose}) => {
-  const [amount, setAmount]     = useState(price||50000);
-  const [tenure, setTenure]     = useState(12);
-  const [rate, setRate]         = useState(12);
-  const [result, setResult]     = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [amount, setAmount]   = useState(price||50000);
+  const [tenure, setTenure]   = useState(12);
+  const [rate, setRate]       = useState(12);
+  const [result, setResult]   = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const calculate = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/api/emi/calculate`,{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({amount,tenure_months:tenure,annual_rate:rate})
-      });
-      const d = await r.json();
-      setResult(d);
+      const r=await fetch(`${API}/api/emi/calculate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount,tenure_months:tenure,annual_rate:rate})});
+      const d=await r.json(); setResult(d);
     } catch(err) { alert("Failed: "+err.message); }
     setLoading(false);
   };
 
-  useEffect(() => { calculate(); }, []);
+  useEffect(()=>{ calculate(); },[]);
 
   return (
     <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -103,110 +98,293 @@ const EMICalculator = ({price, onClose}) => {
           <div style={{fontWeight:700,fontSize:17}}>💳 EMI Calculator</div>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer"}}>✕</button>
         </div>
-
         <div style={{padding:"0 20px"}}>
-          {/* Loan Amount */}
           <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontSize:13,color:"#666"}}>Loan Amount</span>
-              <span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>₹{Number(amount).toLocaleString("en-IN")}</span>
-            </div>
-            <input type="range" min={5000} max={500000} step={1000} value={amount}
-              onChange={e=>{setAmount(Number(e.target.value));}}
-              onMouseUp={calculate} onTouchEnd={calculate}
-              style={{width:"100%",accentColor:"#BA7517"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
-              <span>₹5,000</span><span>₹5,00,000</span>
-            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:13,color:"#666"}}>Loan Amount</span><span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>₹{Number(amount).toLocaleString("en-IN")}</span></div>
+            <input type="range" min={5000} max={500000} step={1000} value={amount} onChange={e=>setAmount(Number(e.target.value))} onMouseUp={calculate} onTouchEnd={calculate} style={{width:"100%",accentColor:"#BA7517"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}><span>₹5,000</span><span>₹5,00,000</span></div>
           </div>
-
-          {/* Tenure */}
           <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontSize:13,color:"#666"}}>Tenure</span>
-              <span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>{tenure} Months</span>
-            </div>
-            <input type="range" min={3} max={36} step={3} value={tenure}
-              onChange={e=>{setTenure(Number(e.target.value));}}
-              onMouseUp={calculate} onTouchEnd={calculate}
-              style={{width:"100%",accentColor:"#BA7517"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
-              <span>3 Mo</span><span>36 Mo</span>
-            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:13,color:"#666"}}>Tenure</span><span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>{tenure} Months</span></div>
+            <input type="range" min={3} max={36} step={3} value={tenure} onChange={e=>setTenure(Number(e.target.value))} onMouseUp={calculate} onTouchEnd={calculate} style={{width:"100%",accentColor:"#BA7517"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}><span>3 Mo</span><span>36 Mo</span></div>
           </div>
-
-          {/* Interest Rate */}
           <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontSize:13,color:"#666"}}>Interest Rate (Annual)</span>
-              <span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>{rate}%</span>
-            </div>
-            <input type="range" min={0} max={24} step={0.5} value={rate}
-              onChange={e=>{setRate(Number(e.target.value));}}
-              onMouseUp={calculate} onTouchEnd={calculate}
-              style={{width:"100%",accentColor:"#BA7517"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
-              <span>0% (No Cost)</span><span>24%</span>
-            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:13,color:"#666"}}>Interest Rate</span><span style={{fontWeight:700,color:"#BA7517",fontSize:15}}>{rate}%</span></div>
+            <input type="range" min={0} max={24} step={0.5} value={rate} onChange={e=>setRate(Number(e.target.value))} onMouseUp={calculate} onTouchEnd={calculate} style={{width:"100%",accentColor:"#BA7517"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}><span>0% (No Cost)</span><span>24%</span></div>
           </div>
-
-          <button onClick={calculate} disabled={loading}
-            style={{width:"100%",padding:12,background:"#BA7517",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:"pointer",marginBottom:16}}>
-            {loading?"⏳ Calculating...":"🔄 Calculate EMI"}
-          </button>
-
+          <button onClick={calculate} disabled={loading} style={{width:"100%",padding:12,background:"#BA7517",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:"pointer",marginBottom:16}}>{loading?"⏳ Calculating...":"🔄 Calculate EMI"}</button>
           {result&&!result.error&&(
             <>
-              {/* Result Card */}
               <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:16,padding:20,marginBottom:16,textAlign:"center",color:"white"}}>
                 <div style={{fontSize:13,opacity:0.85,marginBottom:4}}>Monthly EMI</div>
                 <div style={{fontSize:36,fontWeight:800}}>₹{Number(result.emi).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
                 <div style={{fontSize:12,opacity:0.8,marginTop:4}}>per month for {tenure} months</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:16}}>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
-                    <div style={{fontSize:11,opacity:0.8}}>Principal</div>
-                    <div style={{fontWeight:700,fontSize:14}}>₹{Number(result.principal).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
-                  </div>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
-                    <div style={{fontSize:11,opacity:0.8}}>Total Interest</div>
-                    <div style={{fontWeight:700,fontSize:14}}>₹{Number(result.total_interest).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
-                  </div>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
-                    <div style={{fontSize:11,opacity:0.8}}>Total Payment</div>
-                    <div style={{fontWeight:700,fontSize:14}}>₹{Number(result.total_payment).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
-                  </div>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
-                    <div style={{fontSize:11,opacity:0.8}}>Interest Rate</div>
-                    <div style={{fontWeight:700,fontSize:14}}>{rate}% p.a.</div>
-                  </div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}><div style={{fontSize:11,opacity:0.8}}>Principal</div><div style={{fontWeight:700,fontSize:14}}>₹{Number(result.principal).toLocaleString("en-IN",{maximumFractionDigits:0})}</div></div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}><div style={{fontSize:11,opacity:0.8}}>Total Interest</div><div style={{fontWeight:700,fontSize:14}}>₹{Number(result.total_interest).toLocaleString("en-IN",{maximumFractionDigits:0})}</div></div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}><div style={{fontSize:11,opacity:0.8}}>Total Payment</div><div style={{fontWeight:700,fontSize:14}}>₹{Number(result.total_payment).toLocaleString("en-IN",{maximumFractionDigits:0})}</div></div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}><div style={{fontSize:11,opacity:0.8}}>Interest Rate</div><div style={{fontWeight:700,fontSize:14}}>{rate}% p.a.</div></div>
                 </div>
               </div>
-
-              {/* EMI Plans */}
               <div style={{background:"white",borderRadius:12,border:"1px solid #eee",overflow:"hidden",marginBottom:16}}>
                 <div style={{background:"#f8f9fa",padding:"10px 16px",fontWeight:600,fontSize:13,color:"#555"}}>📋 Compare EMI Plans</div>
                 {result.plans?.map((plan,i)=>(
-                  <div key={i} onClick={()=>{setTenure(plan.months);calculate();}}
-                    style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"12px 16px",borderBottom:"0.5px solid #f0f0f0",cursor:"pointer",background:tenure===plan.months?"#FFF3DC":"white"}}>
+                  <div key={i} onClick={()=>{setTenure(plan.months);calculate();}} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"12px 16px",borderBottom:"0.5px solid #f0f0f0",cursor:"pointer",background:tenure===plan.months?"#FFF3DC":"white"}}>
                     <div style={{fontSize:13,fontWeight:tenure===plan.months?600:400,color:tenure===plan.months?"#BA7517":"#333"}}>{plan.label}</div>
                     <div style={{fontSize:13,fontWeight:700,color:"#BA7517",textAlign:"center"}}>₹{Number(plan.emi).toLocaleString("en-IN",{maximumFractionDigits:0})}/mo</div>
                     <div style={{fontSize:11,color:"#888",textAlign:"right"}}>₹{Number(plan.total_interest).toLocaleString("en-IN",{maximumFractionDigits:0})} int.</div>
                   </div>
                 ))}
               </div>
-
-              {/* Bank Info */}
               <div style={{background:"#E6F1FB",borderRadius:12,padding:14,marginBottom:8}}>
                 <div style={{fontWeight:600,fontSize:13,color:"#0C447C",marginBottom:8}}>🏦 Available on EMI via</div>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  {["HDFC Bank","ICICI Bank","SBI","Axis Bank","Kotak","Yes Bank"].map(bank=>(
-                    <span key={bank} style={{background:"white",border:"1px solid #ddd",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#555"}}>{bank}</span>
-                  ))}
-                </div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["HDFC Bank","ICICI Bank","SBI","Axis Bank","Kotak","Yes Bank"].map(bank=>(<span key={bank} style={{background:"white",border:"1px solid #ddd",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#555"}}>{bank}</span>))}</div>
                 <div style={{fontSize:11,color:"#888",marginTop:8}}>*Subject to bank approval. T&C apply.</div>
               </div>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── BUDGET PLANNER COMPONENT ──
+const BudgetPlanner = ({onClose, onAddToCart}) => {
+  const [step, setStep]               = useState(1);
+  const [totalBudget, setTotalBudget] = useState(200000);
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [style, setStyle]             = useState("modern");
+  const [plan, setPlan]               = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [selectedRoomPlan, setSelectedRoomPlan] = useState(null);
+  const [roomProducts, setRoomProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  const ROOM_ICONS = {"Bathroom":"🛁","Bedroom":"🛏️","Kitchen":"🍳","Living Room":"🛋️","Dining Room":"🍽️","Study Room":"📚","Puja Room":"🙏","Exterior":"🏗️"};
+
+  const generatePlan = async () => {
+    setLoading(true);
+    try {
+      const r=await fetch(`${API}/api/budget/plan`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({total_budget:totalBudget,rooms:selectedRooms,style})});
+      const d=await r.json();
+      setPlan(d); setStep(3);
+    } catch(err) { alert("Failed: "+err.message); }
+    setLoading(false);
+  };
+
+  const loadRoomProducts = async (roomPlan) => {
+    setSelectedRoomPlan(roomPlan); setLoadingProducts(true);
+    try {
+      const r=await fetch(`${API}/api/budget/products`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({room_id:roomPlan.room_id,max_budget:roomPlan.allocated})});
+      const d=await r.json(); setRoomProducts(d.products||[]);
+    } catch { setRoomProducts([]); }
+    setLoadingProducts(false);
+  };
+
+  const toggleRoom = (name) => {
+    setSelectedRooms(prev=>prev.includes(name)?prev.filter(r=>r!==name):[...prev,name]);
+  };
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div style={{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",paddingBottom:30}}>
+
+        {/* Header */}
+        <div style={{padding:"20px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:17}}>💰 Smart Budget Planner</div>
+            <div style={{fontSize:12,color:"#888",marginTop:2}}>Step {step} of 3</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+
+        {/* Progress Bar */}
+        <div style={{margin:"12px 20px",background:"#f0f0f0",borderRadius:4,height:4}}>
+          <div style={{height:"100%",background:"#BA7517",borderRadius:4,width:`${(step/3)*100}%`,transition:"width 0.3s"}}/>
+        </div>
+
+        <div style={{padding:"0 20px"}}>
+
+          {/* STEP 1 — Budget & Style */}
+          {step===1&&(
+            <div>
+              <div style={{fontWeight:600,fontSize:15,marginBottom:16,color:"#BA7517"}}>Set Your Budget & Style</div>
+
+              <div style={{background:"#f8f9fa",borderRadius:12,padding:16,marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                  <span style={{fontSize:13,color:"#666"}}>Total Renovation Budget</span>
+                  <span style={{fontWeight:700,color:"#BA7517",fontSize:16}}>₹{Number(totalBudget).toLocaleString("en-IN")}</span>
+                </div>
+                <input type="range" min={25000} max={2000000} step={25000} value={totalBudget} onChange={e=>setTotalBudget(Number(e.target.value))} style={{width:"100%",accentColor:"#BA7517"}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#888",marginTop:4}}>
+                  <span>₹25K</span><span>₹20L</span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:12}}>
+                  {[100000,250000,500000,1000000].map(amt=>(
+                    <button key={amt} onClick={()=>setTotalBudget(amt)}
+                      style={{background:totalBudget===amt?"#BA7517":"#f0f0f0",color:totalBudget===amt?"white":"#555",border:"none",borderRadius:8,padding:"6px 4px",cursor:"pointer",fontSize:11,fontWeight:totalBudget===amt?600:400}}>
+                      ₹{amt>=100000?`${amt/100000}L`:`${amt/1000}K`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:13,color:"#666",marginBottom:8}}>Interior Style</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                  {[{id:"modern",emoji:"🏙️"},{id:"classic",emoji:"🏛️"},{id:"traditional",emoji:"🏯"},{id:"luxury",emoji:"💎"},{id:"minimalist",emoji:"⬜"},{id:"bohemian",emoji:"🌿"}].map(s=>(
+                    <button key={s.id} onClick={()=>setStyle(s.id)}
+                      style={{background:style===s.id?"#FFF3DC":"#f8f9fa",border:style===s.id?"2px solid #BA7517":"1px solid #eee",borderRadius:10,padding:"10px 6px",cursor:"pointer",textAlign:"center"}}>
+                      <div style={{fontSize:20}}>{s.emoji}</div>
+                      <div style={{fontSize:11,marginTop:4,fontWeight:style===s.id?600:400,color:style===s.id?"#BA7517":"#555",textTransform:"capitalize"}}>{s.id}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={()=>setStep(2)} style={{width:"100%",padding:14,background:"#BA7517",color:"white",border:"none",borderRadius:10,fontSize:15,fontWeight:600,cursor:"pointer"}}>Next: Select Rooms →</button>
+            </div>
+          )}
+
+          {/* STEP 2 — Select Rooms */}
+          {step===2&&(
+            <div>
+              <div style={{fontWeight:600,fontSize:15,marginBottom:4,color:"#BA7517"}}>Select Rooms to Renovate</div>
+              <div style={{fontSize:12,color:"#888",marginBottom:16}}>Choose all rooms you want to renovate</div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                {ROOMS.map(room=>{
+                  const isSelected = selectedRooms.includes(room.name);
+                  return (
+                    <div key={room.id} onClick={()=>toggleRoom(room.name)}
+                      style={{background:isSelected?"#FFF3DC":"white",border:isSelected?"2px solid #BA7517":"1px solid #eee",borderRadius:12,padding:14,cursor:"pointer",textAlign:"center",position:"relative"}}>
+                      {isSelected&&<div style={{position:"absolute",top:6,right:8,fontSize:14}}>✅</div>}
+                      <div style={{fontSize:28}}>{room.icon}</div>
+                      <div style={{fontSize:13,fontWeight:isSelected?600:400,color:isSelected?"#BA7517":"#333",marginTop:4}}>{room.name}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{background:"#FFF3DC",borderRadius:10,padding:12,marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:13,color:"#BA7517"}}>
+                  {selectedRooms.length===0?"Select at least 1 room":selectedRooms.length===8?"All 8 rooms selected ✅":`${selectedRooms.length} room${selectedRooms.length>1?"s":""} selected`}
+                </span>
+                {selectedRooms.length>0&&<button onClick={()=>setSelectedRooms([])} style={{fontSize:11,color:"#c00",background:"none",border:"none",cursor:"pointer"}}>Clear</button>}
+              </div>
+
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setStep(1)} style={{flex:1,padding:14,background:"#f0f0f0",color:"#555",border:"none",borderRadius:10,fontSize:14,cursor:"pointer"}}>← Back</button>
+                <button onClick={generatePlan} disabled={selectedRooms.length===0||loading}
+                  style={{flex:2,padding:14,background:selectedRooms.length===0||loading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:10,fontSize:15,fontWeight:600,cursor:selectedRooms.length===0||loading?"not-allowed":"pointer"}}>
+                  {loading?"⏳ Planning...":"✨ Generate Plan →"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3 — Plan Results */}
+          {step===3&&plan&&!selectedRoomPlan&&(
+            <div>
+              <div style={{fontWeight:600,fontSize:15,marginBottom:4,color:"#BA7517"}}>Your Budget Plan 🎯</div>
+              <div style={{fontSize:12,color:"#888",marginBottom:12}}>Total: ₹{Number(plan.total_budget).toLocaleString("en-IN")} across {plan.total_rooms} rooms</div>
+
+              {/* AI Tip */}
+              {plan.ai_tip&&(
+                <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:12,padding:16,marginBottom:16,color:"white"}}>
+                  <div style={{fontWeight:600,fontSize:13,marginBottom:6}}>✨ AI Budget Tip</div>
+                  <div style={{fontSize:13,lineHeight:1.5,opacity:0.95}}>{plan.ai_tip}</div>
+                </div>
+              )}
+
+              {/* Room Allocations */}
+              {plan.plan?.map((room,i)=>(
+                <div key={i} style={{background:"white",borderRadius:12,border:"1px solid #eee",padding:14,marginBottom:10,cursor:"pointer"}}
+                  onClick={()=>loadRoomProducts(room)}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:20}}>{ROOM_ICONS[room.room]||"🏠"}</span>
+                      <div>
+                        <div style={{fontWeight:600,fontSize:14}}>{room.room}</div>
+                        <div style={{fontSize:11,color:"#888"}}>{room.product_count} products available</div>
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontWeight:700,color:"#BA7517",fontSize:15}}>₹{Number(room.allocated).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+                      <div style={{fontSize:11,color:"#888"}}>{room.percentage}% of budget</div>
+                    </div>
+                  </div>
+                  {/* Progress Bar */}
+                  <div style={{background:"#f0f0f0",borderRadius:4,height:6,marginBottom:6}}>
+                    <div style={{height:"100%",background:room.is_feasible?"#BA7517":"#FF4444",borderRadius:4,width:`${room.percentage}%`}}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:11,color:room.is_feasible?"#085041":"#c00"}}>{room.is_feasible?"✅ Budget is sufficient":"⚠️ May need more budget"}</span>
+                    <span style={{fontSize:11,color:"#BA7517",fontWeight:500}}>See products →</span>
+                  </div>
+                </div>
+              ))}
+
+              <div style={{background:"#f8f9fa",borderRadius:12,padding:14,marginBottom:16}}>
+                <div style={{fontWeight:600,fontSize:13,marginBottom:8}}>📊 Budget Summary</div>
+                {plan.plan?.map((room,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}}>
+                    <span>{ROOM_ICONS[room.room]} {room.room}</span>
+                    <span style={{fontWeight:500}}>₹{Number(room.allocated).toLocaleString("en-IN",{maximumFractionDigits:0})}</span>
+                  </div>
+                ))}
+                <div style={{borderTop:"1px solid #ddd",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:14}}>
+                  <span>Total</span>
+                  <span style={{color:"#BA7517"}}>₹{Number(plan.total_budget).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setStep(2);setPlan(null);}} style={{flex:1,padding:12,background:"#f0f0f0",color:"#555",border:"none",borderRadius:10,fontSize:13,cursor:"pointer"}}>← Replan</button>
+                <button onClick={onClose} style={{flex:1,padding:12,background:"#BA7517",color:"white",border:"none",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer"}}>Done ✅</button>
+              </div>
+            </div>
+          )}
+
+          {/* Room Products View */}
+          {step===3&&selectedRoomPlan&&(
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <button onClick={()=>setSelectedRoomPlan(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer"}}>←</button>
+                <div>
+                  <div style={{fontWeight:600,fontSize:15}}>{ROOM_ICONS[selectedRoomPlan.room]} {selectedRoomPlan.room}</div>
+                  <div style={{fontSize:12,color:"#888"}}>Budget: ₹{Number(selectedRoomPlan.allocated).toLocaleString("en-IN",{maximumFractionDigits:0})}</div>
+                </div>
+              </div>
+
+              {loadingProducts?<LoadingSpinner/>:roomProducts.length===0?(
+                <div style={{textAlign:"center",padding:30,color:"#888"}}>
+                  <div style={{fontSize:32}}>🔍</div>
+                  <div style={{marginTop:8}}>No products found in this budget range</div>
+                </div>
+              ):(
+                <>
+                  <div style={{fontSize:12,color:"#888",marginBottom:12}}>Products within ₹{Number(selectedRoomPlan.allocated/3).toLocaleString("en-IN",{maximumFractionDigits:0})} each</div>
+                  {roomProducts.map(p=>(
+                    <div key={p.id} style={{background:"white",borderRadius:12,border:"1px solid #eee",padding:12,marginBottom:10,display:"flex",gap:10,alignItems:"flex-start"}}>
+                      {p.image_url?<img src={p.image_url} alt={p.name} style={{width:70,height:70,borderRadius:8,objectFit:"cover",flexShrink:0}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/70x70/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:70,height:70,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>🏠</div>}
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:600,fontSize:13}}>{p.name}</div>
+                        <div style={{fontSize:11,color:"#888",marginTop:2}}>{p.brand}</div>
+                        <div style={{color:"#BA7517",fontWeight:700,fontSize:14,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}<span style={{fontSize:10,color:"#888",fontWeight:400}}> / {p.unit}</span></div>
+                        {Number(p.avg_rating)>0&&<div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}><StarRating rating={Math.round(Number(p.avg_rating))} size={11}/><span style={{fontSize:10,color:"#888"}}>({p.review_count||0})</span></div>}
+                        <button onClick={()=>onAddToCart(p)} style={{marginTop:6,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"4px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add to Cart</button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -313,9 +491,10 @@ export default function App() {
   const [showShareModal, setShowShareModal]   = useState(false);
   const [shareProduct, setShareProduct]       = useState(null);
   const [shareCopied, setShareCopied]         = useState(false);
-  // Day 33 — EMI
   const [showEMI, setShowEMI]                 = useState(false);
   const [emiProduct, setEmiProduct]           = useState(null);
+  // Day 34 — Budget Planner
+  const [showBudgetPlanner, setShowBudgetPlanner] = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -327,8 +506,7 @@ export default function App() {
   useEffect(() => {
     fetch(`${API}/api/brands`).then(r=>r.json()).then(d=>setBrands(d.brands||[]));
     fetch(`${API}/api/styles`).then(r=>r.json()).then(d=>setStyles(d.styles||[]));
-    loadTopRated();
-    loadSales();
+    loadTopRated(); loadSales();
   }, []);
 
   useEffect(() => {
@@ -340,9 +518,7 @@ export default function App() {
   }, [screen, user]);
 
   useEffect(() => { if (uploadScreen) loadAllProducts(); }, [uploadScreen]);
-  useEffect(() => {
-    if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); }
-  }, [selectedProduct]);
+  useEffect(() => { if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); } }, [selectedProduct]);
   useEffect(() => { if (user) { loadWishlist(); loadRecentlyViewed(); } }, [user]);
   useEffect(() => { setShowCompareBar(compareList.length>0); }, [compareList]);
 
@@ -353,43 +529,26 @@ export default function App() {
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
   const loadRecentlyViewed = async () => { if (!user) return; try { const r=await fetch(`${API}/api/recently-viewed/${user.id}`); const d=await r.json(); setRecentlyViewed(d.recently_viewed||[]); } catch {} };
 
-  const openShare = async (product) => { setShareProduct(product); setShowShareModal(true); setShareCopied(false); track("share_product",product.room_id,product.id,product.name); };
-  const getShareText = (p) => { if (!p) return ""; return `🏠 HomeBot AI — Interior Design\n\n${p.name}\nRoom: ${p.room_name||""}\nBrand: ${p.brand||""}\n💰 Price: ₹${Number(p.price).toLocaleString("en-IN")} / ${p.unit||""}\n`+(p.material?`Material: ${p.material}\n`:"")+(p.color?`Color: ${p.color}\n`:"")+`\n✨ Discover more at HomeBot AI!\nIndia's #1 AI Interior Design App`; };
-  const shareOnWhatsApp = (p) => { window.open(`https://wa.me/?text=${encodeURIComponent(getShareText(p))}`, "_blank"); };
+  const openShare      = (product) => { setShareProduct(product); setShowShareModal(true); setShareCopied(false); track("share_product",product.room_id,product.id,product.name); };
+  const getShareText   = (p) => { if (!p) return ""; return `🏠 HomeBot AI\n\n${p.name}\nRoom: ${p.room_name||""}\nBrand: ${p.brand||""}\n💰 ₹${Number(p.price).toLocaleString("en-IN")} / ${p.unit||""}\n`+(p.material?`Material: ${p.material}\n`:"")+`\n✨ HomeBot AI — India's #1 Interior Design App`; };
+  const shareOnWhatsApp = (p) => { window.open(`https://wa.me/?text=${encodeURIComponent(getShareText(p))}`,"_blank"); };
   const copyToClipboard = async (p) => { try { await navigator.clipboard.writeText(getShareText(p)); setShareCopied(true); setTimeout(()=>setShareCopied(false),2000); } catch { alert("Copied!"); } };
 
   const loadWishlist = async () => {
     if (!user) return; setWishlistLoading(true);
-    try {
-      const r=await fetch(`${API}/api/wishlist/${user.id}`); const d=await r.json();
-      setWishlist(d.wishlist||[]); setWishlistIds(new Set((d.wishlist||[]).map(i=>i.id)));
-    } catch { setWishlist([]); }
+    try { const r=await fetch(`${API}/api/wishlist/${user.id}`); const d=await r.json(); setWishlist(d.wishlist||[]); setWishlistIds(new Set((d.wishlist||[]).map(i=>i.id))); } catch { setWishlist([]); }
     setWishlistLoading(false);
   };
 
   const toggleWishlist = async (product) => {
     if (!user) { alert("Please login!"); return; }
     const isIn = wishlistIds.has(product.id);
-    if (isIn) {
-      try { await fetch(`${API}/api/wishlist/${user.id}/${product.id}`,{method:"DELETE"}); setWishlistIds(prev=>{const n=new Set(prev);n.delete(product.id);return n;}); setWishlist(prev=>prev.filter(i=>i.id!==product.id)); } catch(err) { alert("Failed: "+err.message); }
-    } else {
-      try { const r=await fetch(`${API}/api/wishlist`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user.id,product_id:product.id})}); const d=await r.json(); if (d.status==="ok"||d.status==="exists") { setWishlistIds(prev=>new Set([...prev,product.id])); setWishlist(prev=>[...prev,{...product}]); } } catch(err) { alert("Failed: "+err.message); }
-    }
+    if (isIn) { try { await fetch(`${API}/api/wishlist/${user.id}/${product.id}`,{method:"DELETE"}); setWishlistIds(prev=>{const n=new Set(prev);n.delete(product.id);return n;}); setWishlist(prev=>prev.filter(i=>i.id!==product.id)); } catch(err) { alert("Failed"); } }
+    else { try { const r=await fetch(`${API}/api/wishlist`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user.id,product_id:product.id})}); const d=await r.json(); if (d.status==="ok"||d.status==="exists") { setWishlistIds(prev=>new Set([...prev,product.id])); setWishlist(prev=>[...prev,{...product}]); } } catch(err) { alert("Failed"); } }
   };
 
-  const toggleCompare = (product) => {
-    const exists = compareList.find(p=>p.id===product.id);
-    if (exists) { setCompareList(prev=>prev.filter(p=>p.id!==product.id)); }
-    else { if (compareList.length>=2) { alert("Maximum 2 products!"); return; } setCompareList(prev=>[...prev,product]); }
-  };
-
-  const startCompare = async () => {
-    if (compareList.length<2) { alert("Select 2 products!"); return; }
-    setCompareLoading(true);
-    try { const r=await fetch(`${API}/api/compare`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_ids:compareList.map(p=>p.id)})}); const d=await r.json(); setCompareData(d.products||[]); setScreen("compare"); } catch(err) { alert("Failed: "+err.message); }
-    setCompareLoading(false);
-  };
-
+  const toggleCompare = (product) => { const exists=compareList.find(p=>p.id===product.id); if (exists) { setCompareList(prev=>prev.filter(p=>p.id!==product.id)); } else { if (compareList.length>=2) { alert("Max 2 products!"); return; } setCompareList(prev=>[...prev,product]); } };
+  const startCompare  = async () => { if (compareList.length<2) { alert("Select 2!"); return; } setCompareLoading(true); try { const r=await fetch(`${API}/api/compare`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_ids:compareList.map(p=>p.id)})}); const d=await r.json(); setCompareData(d.products||[]); setScreen("compare"); } catch(err) { alert("Failed"); } setCompareLoading(false); };
   const loadSaleProducts = async (sale) => { setSelectedSale(sale); setSaleLoading(true); try { const r=await fetch(`${API}/api/sales/${sale.id}/products`); const d=await r.json(); setSaleProducts(d.products||[]); setScreen("sale_detail"); } catch {} setSaleLoading(false); };
   const loadOrders = async () => { if (!user) return; setOrdersLoading(true); try { const r=await fetch(`${API}/api/orders/${user.id}`); const d=await r.json(); setOrders(d.orders||[]); } catch { setOrders([]); } setOrdersLoading(false); };
 
@@ -399,64 +558,29 @@ export default function App() {
     setProfileLoading(false);
   };
 
-  const loadStyleProfile = async () => {
-    try { const r=await fetch(`${API}/api/personalization/${user?.id||1}`); const d=await r.json(); setStyleProfile(d); if (d.profile) { setStylePref(d.profile.favorite_style||"modern"); setBudgetPref(d.profile.budget_range||"medium"); setColorPref(d.profile.color_pref||""); setMaterialPref(d.profile.material_pref||""); } } catch {}
-  };
-
-  const saveStyleProfile = async () => {
-    try { const r=await fetch(`${API}/api/personalization/${user?.id||1}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({favorite_style:stylePref,budget_range:budgetPref,color_pref:colorPref,material_pref:materialPref})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Saved!"); setShowStyleSetup(false); loadStyleProfile(); } } catch(err) { alert("Failed: "+err.message); }
-  };
-
-  const loadAllProducts    = async () => { try { const r=await fetch(`${API}/api/search?q=`); const d=await r.json(); setAllProducts(d.products||[]); } catch { setAllProducts([]); } };
+  const loadStyleProfile = async () => { try { const r=await fetch(`${API}/api/personalization/${user?.id||1}`); const d=await r.json(); setStyleProfile(d); if (d.profile) { setStylePref(d.profile.favorite_style||"modern"); setBudgetPref(d.profile.budget_range||"medium"); setColorPref(d.profile.color_pref||""); setMaterialPref(d.profile.material_pref||""); } } catch {} };
+  const saveStyleProfile = async () => { try { const r=await fetch(`${API}/api/personalization/${user?.id||1}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({favorite_style:stylePref,budget_range:budgetPref,color_pref:colorPref,material_pref:materialPref})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Saved!"); setShowStyleSetup(false); loadStyleProfile(); } } catch(err) { alert("Failed"); } };
+  const loadAllProducts = async () => { try { const r=await fetch(`${API}/api/search?q=`); const d=await r.json(); setAllProducts(d.products||[]); } catch { setAllProducts([]); } };
   const loadRecommendations = async () => { setRecLoading(true); try { const r=await fetch(`${API}/api/recommendations/user/${user?.id||1}`); const d=await r.json(); setRecommendations(d.recommendations||[]); } catch { setRecommendations([]); } try { const r=await fetch(`${API}/api/trending`); const d=await r.json(); setTrending(d.trending||[]); } catch { setTrending([]); } setRecLoading(false); };
 
-  const uploadGalleryImage = async (productId) => {
-    if (!galleryFile) { alert("Select an image!"); return; } setGalleryUploading(true);
-    try { const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery"); const r=await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { alert("✅ Added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); } else alert("Error: "+d.error); } catch(err) { alert("Failed: "+err.message); }
-    setGalleryUploading(false);
-  };
-
-  const submitReview = async () => {
-    if (!selectedProduct) return; let photoUrl="";
-    if (reviewPhoto) { try { const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") photoUrl=d.image_url; } catch {} }
-    try { const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})}); const d=await r.json(); if (d.status==="ok") { alert(d.is_verified?"✅ Verified!":"✅ Submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); } } catch(err) { alert("Failed: "+err.message); }
-  };
-
-  const submitChatbotRating = async () => {
-    try { const r=await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Thank you!"); setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0); } } catch(err) { alert("Failed: "+err.message); }
-  };
-
-  const uploadImage = async () => {
-    if (!uploadFile||!uploadProductId) { alert("Select product and image!"); return; } setUploadLoading(true);
-    try { const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Uploaded!"); } else alert("Error: "+d.error); } catch(err) { alert("Upload failed: "+err.message); }
-    setUploadLoading(false);
-  };
-
+  const uploadGalleryImage = async (productId) => { if (!galleryFile) { alert("Select image!"); return; } setGalleryUploading(true); try { const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery"); const r=await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { alert("✅ Added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); } else alert("Error: "+d.error); } catch(err) { alert("Failed"); } setGalleryUploading(false); };
+  const submitReview = async () => { if (!selectedProduct) return; let photoUrl=""; if (reviewPhoto) { try { const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") photoUrl=d.image_url; } catch {} } try { const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); } } catch(err) { alert("Failed"); } };
+  const submitChatbotRating = async () => { try { const r=await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Thank you!"); setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0); } } catch(err) { alert("Failed"); } };
+  const uploadImage = async () => { if (!uploadFile||!uploadProductId) { alert("Select product and image!"); return; } setUploadLoading(true); try { const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Uploaded!"); } else alert("Error: "+d.error); } catch(err) { alert("Upload failed"); } setUploadLoading(false); };
   const trackOrderFn = async (orderId) => { setTrackLoading(true); try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track"); } setTrackLoading(false); };
-  const saveProfile = async () => { try { const r=await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); } } catch(err) { alert("Failed: "+err.message); } };
+  const saveProfile = async () => { try { const r=await fetch(`${API}/api/profile/${user.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:editName,phone:editPhone,city:editCity,language:editLang})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Updated!"); setEditProfile(false); loadProfile(); setUser({...user,name:editName}); } } catch(err) { alert("Failed"); } };
 
-  const validateCoupon = async () => {
-    if (!couponCode.trim()) { setCouponError("Enter a coupon code!"); return; } setCouponLoading(true); setCouponError("");
-    try { const r=await fetch(`${API}/api/coupons/validate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:couponCode.toUpperCase(),user_id:user?.id||1,order_total:subtotal})}); const d=await r.json(); if (d.valid) { setCouponData(d); setCouponError(""); } else { setCouponData(null); setCouponError(d.message||"Invalid coupon"); } } catch(err) { setCouponError("Failed: "+err.message); }
-    setCouponLoading(false);
-  };
-
+  const validateCoupon = async () => { if (!couponCode.trim()) { setCouponError("Enter coupon!"); return; } setCouponLoading(true); setCouponError(""); try { const r=await fetch(`${API}/api/coupons/validate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:couponCode.toUpperCase(),user_id:user?.id||1,order_total:subtotal})}); const d=await r.json(); if (d.valid) { setCouponData(d); setCouponError(""); } else { setCouponData(null); setCouponError(d.message||"Invalid"); } } catch(err) { setCouponError("Failed"); } setCouponLoading(false); };
   const loadAvailableCoupons = async () => { try { const r=await fetch(`${API}/api/coupons`); const d=await r.json(); setAvailableCoupons(d.coupons||[]); } catch {} };
   const removeCoupon = () => { setCouponData(null); setCouponCode(""); setCouponError(""); };
 
   const placeOrder = async () => {
     if (cart.length===0) { alert("Cart is empty!"); return; } setOrderPlacing(true);
-    try { const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home",coupon_id:couponData?.coupon_id||null,coupon_discount:couponData?.discount||0})}); const d=await r.json(); if (d.status==="ok") { setOrderSuccess(d); setCart([]); setCouponData(null); setCouponCode(""); track("place_order",null,null,`Order #${d.order_id}`); } else alert("Order failed: "+d.error); } catch(err) { alert("Failed: "+err.message); }
+    try { const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home",coupon_id:couponData?.coupon_id||null,coupon_discount:couponData?.discount||0})}); const d=await r.json(); if (d.status==="ok") { setOrderSuccess(d); setCart([]); setCouponData(null); setCouponCode(""); track("place_order",null,null,`Order #${d.order_id}`); } else alert("Order failed: "+d.error); } catch(err) { alert("Failed"); }
     setOrderPlacing(false);
   };
 
-  const handleSearch = async () => {
-    setSearching(true); let url=`${API}/api/search?q=${searchQuery}`;
-    if (filterRoom) url+=`&room_id=${filterRoom}`; if (filterMin) url+=`&min_price=${filterMin}`; if (filterMax) url+=`&max_price=${filterMax}`; if (filterStyle) url+=`&style=${filterStyle}`; if (filterBrand) url+=`&brand=${filterBrand}`;
-    try { const r=await fetch(url); const d=await r.json(); setSearchResults(d.products||[]); track("search",null,null,searchQuery); } catch { setSearchResults([]); }
-    setSearching(false);
-  };
-
+  const handleSearch = async () => { setSearching(true); let url=`${API}/api/search?q=${searchQuery}`; if (filterRoom) url+=`&room_id=${filterRoom}`; if (filterMin) url+=`&min_price=${filterMin}`; if (filterMax) url+=`&max_price=${filterMax}`; if (filterStyle) url+=`&style=${filterStyle}`; if (filterBrand) url+=`&brand=${filterBrand}`; try { const r=await fetch(url); const d=await r.json(); setSearchResults(d.products||[]); track("search",null,null,searchQuery); } catch { setSearchResults([]); } setSearching(false); };
   const clearFilters   = () => { setSearchQuery(""); setFilterRoom(""); setFilterMin(""); setFilterMax(""); setFilterStyle(""); setFilterBrand(""); setSearchResults([]); };
   const addToCart      = (p) => { const e=cart.find(i=>i.id===p.id); if(e){setCart(cart.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i));}else{setCart([...cart,{...p,qty:1}]);} track("add_to_cart",p.room_id,p.id,p.name); };
   const removeFromCart = (id) => setCart(cart.filter(i=>i.id!==id));
@@ -465,32 +589,11 @@ export default function App() {
   const grandTotal = subtotal+gst;
   const finalTotal = Math.max(0, grandTotal-(couponData?.discount||0));
 
-  const sendMessage = async () => {
-    if (!input.trim()) return; const userMsg=input; setInput("");
-    setMessages(m=>[...m,{role:"user",text:userMsg}]); setLoading(true); track("chat_message",null,null,userMsg);
-    try { const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`; const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})}); const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply); setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]); setTimeout(()=>setShowChatbotRating(true),3000); } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); }
-    setLoading(false);
-  };
-
-  const downloadPDF = async () => {
-    if (cart.length===0) { alert("Add products first!"); return; } setPdfLoading(true);
-    try { const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})}); if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; } const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"})); const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100); } catch(err) { alert("PDF failed: "+err.message); }
-    setPdfLoading(false);
-  };
-
-  const sendWhatsApp = async () => {
-    const phone=prompt("Enter WhatsApp number:\nExample: +919876543210"); if (!phone) return;
-    try { const r=await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:finalTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})}); const d=await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error); } catch(err) { alert("Failed: "+err.message); }
-  };
-
-  const handleLogin = async () => {
-    setLoginError("");
-    try { const r=await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})}); const d=await r.json(); if (d.status==="ok") { setUser(d.user); setScreen("home"); track("login",null,null,d.user.name); } else setLoginError(d.message||"Login failed"); } catch { setLoginError("Connection error."); }
-  };
-
-  const handleRegister = async () => {
-    try { const r=await fetch(`${API}/api/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:regName,email:regEmail,password:regPassword,phone:regPhone,city:regCity,language:"english"})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Registered! Please login."); setShowRegister(false); } else alert("Error: "+d.error); } catch(err) { alert("Failed: "+err.message); }
-  };
+  const sendMessage = async () => { if (!input.trim()) return; const userMsg=input; setInput(""); setMessages(m=>[...m,{role:"user",text:userMsg}]); setLoading(true); track("chat_message",null,null,userMsg); try { const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`; const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})}); const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply); setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]); setTimeout(()=>setShowChatbotRating(true),3000); } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); } setLoading(false); };
+  const downloadPDF = async () => { if (cart.length===0) { alert("Add products first!"); return; } setPdfLoading(true); try { const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})}); if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; } const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"})); const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100); } catch(err) { alert("PDF failed"); } setPdfLoading(false); };
+  const sendWhatsApp = async () => { const phone=prompt("Enter WhatsApp number:\nExample: +919876543210"); if (!phone) return; try { const r=await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:finalTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})}); const d=await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error); } catch(err) { alert("Failed"); } };
+  const handleLogin = async () => { setLoginError(""); try { const r=await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})}); const d=await r.json(); if (d.status==="ok") { setUser(d.user); setScreen("home"); track("login",null,null,d.user.name); } else setLoginError(d.message||"Login failed"); } catch { setLoginError("Connection error."); } };
+  const handleRegister = async () => { try { const r=await fetch(`${API}/api/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:regName,email:regEmail,password:regPassword,phone:regPhone,city:regCity,language:"english"})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Registered! Please login."); setShowRegister(false); } else alert("Error: "+d.error); } catch(err) { alert("Failed"); } };
 
   const S = {
     input:  {width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,marginBottom:12,outline:"none",boxSizing:"border-box"},
@@ -561,7 +664,7 @@ export default function App() {
             <button onClick={()=>window.open(`https://t.me/share/url?text=${encodeURIComponent(getShareText(p))}`,"_blank")} style={{background:"#0088cc",color:"white",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><span style={{fontSize:24}}>✈️</span>Telegram</button>
             <button onClick={()=>copyToClipboard(p)} style={{background:shareCopied?"#085041":"#f0f0f0",color:shareCopied?"white":"#333",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><span style={{fontSize:24}}>{shareCopied?"✅":"📋"}</span>{shareCopied?"Copied!":"Copy"}</button>
           </div>
-          <div style={{background:"#f8f9fa",borderRadius:8,padding:12,fontSize:12,color:"#555",lineHeight:1.6,whiteSpace:"pre-line",maxHeight:120,overflowY:"auto"}}>{getShareText(p)}</div>
+          <div style={{background:"#f8f9fa",borderRadius:8,padding:12,fontSize:12,color:"#555",lineHeight:1.6,whiteSpace:"pre-line",maxHeight:100,overflowY:"auto"}}>{getShareText(p)}</div>
         </div>
       </div>
     );
@@ -690,7 +793,6 @@ export default function App() {
               {label:"🧱 Material", key:"material",    fmt:(v)=>v||"—"},
               {label:"🎨 Color",    key:"color",       fmt:(v)=>v||"—"},
               {label:"📐 Length",   key:"length_cm",   fmt:(v)=>v?`${v} cm`:"—"},
-              {label:"📐 Width",    key:"width_cm",    fmt:(v)=>v?`${v} cm`:"—"},
               {label:"🏠 Room",     key:"room_name",   fmt:(v)=>v||"—"},
               {label:"🎨 Style",    key:"style_tag",   fmt:(v)=>v||"—"},
               {label:"📦 Stock",    key:"stock_qty",   fmt:(v)=>v?`${v} units`:"—"},
@@ -761,7 +863,6 @@ export default function App() {
             </div>
             {productGallery.length>1?(<div style={{display:"flex",gap:8,padding:12,overflowX:"auto"}}>{productGallery.map((img,i)=>(<img key={i} src={img.image_url} alt={`view ${i+1}`} onClick={()=>setGalleryIndex(i)} style={{width:60,height:60,borderRadius:6,objectFit:"cover",cursor:"pointer",flexShrink:0,border:i===galleryIndex?"2px solid #BA7517":"2px solid transparent",opacity:i===galleryIndex?1:0.7}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/60x60/FFF3DC/BA7517?text=🏠";}}/>))}<div onClick={()=>setShowGalleryUpload(true)} style={{width:60,height:60,borderRadius:6,border:"2px dashed #BA7517",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#BA7517",fontSize:24}}>+</div></div>):(<div style={{padding:"8px 12px",textAlign:"center"}}><button onClick={()=>setShowGalleryUpload(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px dashed #BA7517",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:12}}>📷 Add More Photos</button></div>)}
           </div>
-
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{fontWeight:700,fontSize:18,flex:1}}>{selectedProduct.name}</div>
@@ -769,13 +870,10 @@ export default function App() {
             </div>
             <div style={{fontSize:13,color:"#888",marginTop:4}}>{selectedProduct.description}</div>
             <div style={{color:"#BA7517",fontWeight:700,fontSize:24,marginTop:8}}>₹{Number(selectedProduct.price).toLocaleString("en-IN")}<span style={{fontSize:13,color:"#888",fontWeight:400}}> / {selectedProduct.unit}</span></div>
-
-            {/* EMI Quick Info */}
             <div style={{background:"#E6F1FB",borderRadius:8,padding:"8px 12px",marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>{setEmiProduct(selectedProduct);setShowEMI(true);}}>
               <span style={{fontSize:13,color:"#0C447C"}}>💳 EMI from ₹{Math.round(Number(selectedProduct.price)*1.12/12).toLocaleString("en-IN")}/month</span>
               <span style={{fontSize:12,color:"#0C447C",fontWeight:600}}>Calculate →</span>
             </div>
-
             {total>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}><StarRating rating={Math.round(avg)} size={18}/><span style={{fontSize:14,fontWeight:600}}>{Number(avg).toFixed(1)}</span><span style={{fontSize:13,color:"#888"}}>({total} reviews)</span></div>}
             <div style={{marginTop:12}}>
               {[{label:"Brand",value:selectedProduct.brand},{label:"Material",value:selectedProduct.material},{label:"Color",value:selectedProduct.color},{label:"Stock",value:selectedProduct.stock_qty?`${selectedProduct.stock_qty} units`:null},selectedProduct.length_cm&&{label:"Size",value:`${selectedProduct.length_cm}×${selectedProduct.width_cm}×${selectedProduct.height_cm} cm`}].filter(s=>s&&s.value).map((spec,i)=>(
@@ -789,7 +887,6 @@ export default function App() {
               <button onClick={()=>openShare(selectedProduct)} style={{background:"#25D366",color:"white",border:"none",borderRadius:10,padding:"14px 12px",fontSize:13,cursor:"pointer",fontWeight:600}}>📤</button>
             </div>
           </div>
-
           {bundles?.bundle_products?.length>0&&(
             <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
               <div style={{fontWeight:600,fontSize:15,marginBottom:12}}>🛍️ Complete the Look</div>
@@ -805,7 +902,6 @@ export default function App() {
               </div>
             </div>
           )}
-
           <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontWeight:600,fontSize:15}}>⭐ Customer Reviews</div>
@@ -826,7 +922,7 @@ export default function App() {
                 );})}
               </div>
             )}
-            {productReviews?.reviews?.length===0&&<div style={{textAlign:"center",padding:20,color:"#888",fontSize:13}}>No reviews yet — be the first!</div>}
+            {productReviews?.reviews?.length===0&&<div style={{textAlign:"center",padding:20,color:"#888",fontSize:13}}>No reviews yet!</div>}
             {productReviews?.reviews?.map((review,i)=>(
               <div key={i} style={{padding:"12px 0",borderBottom:"0.5px solid #f0f0f0"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -893,6 +989,7 @@ export default function App() {
     <div style={{fontFamily:"sans-serif",maxWidth:480,margin:"0 auto",background:"#f8f9fa",minHeight:"100vh"}}>
       <ShareModal/>
       {showEMI&&<EMICalculator price={emiProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
+      {showBudgetPlanner&&<BudgetPlanner onClose={()=>setShowBudgetPlanner(false)} onAddToCart={addToCart}/>}
 
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
@@ -992,8 +1089,12 @@ export default function App() {
 
         {screen==="home"&&(
           <div>
-            <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>Select a room to renovate</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+              <div style={{fontSize:16,fontWeight:600}}>Select a room to renovate</div>
+              <button onClick={()=>setShowBudgetPlanner(true)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:20,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>💰 Plan Budget</button>
+            </div>
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Tap a room to see products</div>
+
             {sales.length>0&&(
               <div style={{marginBottom:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:10,color:"#BA7517"}}>🎉 Festival Sales Live Now!</div>
@@ -1010,6 +1111,7 @@ export default function App() {
                 </div>
               </div>
             )}
+
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {ROOMS.map(room=>(
                 <div key={room.id} onClick={()=>{setRoom(room);setScreen("products");track("view_room",room.id,null,room.name);}}
@@ -1019,6 +1121,7 @@ export default function App() {
                 </div>
               ))}
             </div>
+
             {recentlyViewed.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#555"}}>👁️ Recently Viewed</div>
@@ -1039,6 +1142,7 @@ export default function App() {
                 </div>
               </div>
             )}
+
             {topRated.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>⭐ Top Rated Products</div>
@@ -1054,11 +1158,16 @@ export default function App() {
                 </div>
               </div>
             )}
+
             <div style={{background:"white",borderRadius:12,padding:16,marginTop:16}}>
-              <div style={{fontWeight:600,marginBottom:8}}>💰 Your Budget</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontWeight:600}}>💰 Quick Budget</div>
+                <button onClick={()=>setShowBudgetPlanner(true)} style={{fontSize:11,color:"#BA7517",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>Full Planner →</button>
+              </div>
               <input type="range" min={10000} max={500000} step={5000} value={budget} onChange={e=>setBudget(Number(e.target.value))} style={{width:"100%",accentColor:"#BA7517"}}/>
               <div style={{textAlign:"center",fontWeight:600,color:"#BA7517",fontSize:18}}>₹{budget.toLocaleString("en-IN")}</div>
             </div>
+
             {cart.length>0&&(
               <div style={{background:"#FFF3DC",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div><div style={{fontWeight:600,fontSize:14}}>🛒 {cart.length} items in cart</div><div style={{fontSize:13,color:"#BA7517"}}>₹{finalTotal.toLocaleString("en-IN")} total</div></div>
@@ -1258,6 +1367,7 @@ export default function App() {
                     <button onClick={()=>setUploadScreen(true)} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>📸 Images</button>
                     <button onClick={()=>setShowStyleSetup(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px solid #BA7517",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>🎨 Style</button>
                     <button onClick={()=>setScreen("wishlist")} style={{background:"#FCEBEB",color:"#c00",border:"1px solid #fcc",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>❤️ Wishlist ({wishlistIds.size})</button>
+                    <button onClick={()=>setShowBudgetPlanner(true)} style={{background:"#E1F5EE",color:"#085041",border:"1px solid #1D9E75",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>💰 Budget Plan</button>
                   </div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
@@ -1321,7 +1431,6 @@ export default function App() {
                           <div>
                             <div style={{background:"#FFF3DC",color:"#BA7517",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:12,display:"inline-block"}}>{c.code}</div>
                             <div style={{fontSize:11,color:"#888",marginTop:2}}>{c.description}</div>
-                            <div style={{fontSize:11,color:"#555",marginTop:1}}>Min: ₹{Number(c.min_order_value).toLocaleString("en-IN")} | {c.discount_type==="percent"?`${c.discount_value}% off`:`₹${c.discount_value} off`}</div>
                           </div>
                           <button onClick={()=>{setCouponCode(c.code);setShowCoupons(false);}} style={{background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Apply</button>
                         </div>

@@ -1590,6 +1590,137 @@ def calculate_emi():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── SMART BUDGET PLANNER ──
 
+@app.route("/api/budget/plan", methods=["POST"])
+def budget_plan():
+    try:
+        data        = request.get_json()
+        total_budget = float(data.get("total_budget", 100000))
+        rooms_list   = data.get("rooms", [])
+        style        = data.get("style", "modern")
+
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+        # Get avg price per room
+        cursor.execute(
+            """SELECT r.id, r.name,
+               COUNT(p.id) as product_count,
+               COALESCE(AVG(p.price), 0) as avg_price,
+               COALESCE(MIN(p.price), 0) as min_price,
+               COALESCE(MAX(p.price), 0) as max_price
+               FROM rooms r
+               LEFT JOIN products p ON p.room_id = r.id
+               GROUP BY r.id, r.name
+               ORDER BY r.id"""
+        )
+        room_data = cursor.fetchall()
+
+        # Budget allocation weights by room priority
+        room_weights = {
+            "Living Room": 25, "Bedroom": 20, "Kitchen": 18,
+            "Bathroom": 15, "Dining Room": 10, "Study Room": 6,
+            "Puja Room": 4, "Exterior": 2
+        }
+
+        # Calculate allocation
+        plan    = []
+        total_w = sum(room_weights.get(r["name"], 5) for r in room_data if not rooms_list or r["name"] in rooms_list)
+
+        for room in room_data:
+            if rooms_list and room["name"] not in rooms_list:
+                continue
+            weight        = room_weights.get(room["name"], 5)
+            allocated     = round((weight / total_w) * total_budget, 2)
+            min_needed    = float(room["min_price"]) * 3
+            is_feasible   = allocated >= min_needed
+
+            # Get top products within budget
+            cursor.execute(
+                """SELECT p.name, p.price, p.brand, p.image_url
+                   FROM products p
+                   WHERE p.room_id = %s AND p.price <= %s
+                   ORDER BY p.price DESC
+                   LIMIT 3""",
+                (room["id"], allocated / 3)
+            )
+            top_products = cursor.fetchall()
+
+            plan.append({
+                "room":          room["name"],
+                "room_id":       room["id"],
+                "allocated":     allocated,
+                "percentage":    round((weight / total_w) * 100, 1),
+                "min_needed":    round(min_needed, 2),
+                "is_feasible":   is_feasible,
+                "avg_price":     float(room["avg_price"]),
+                "product_count": room["product_count"],
+                "top_products":  list(top_products)
+            })
+
+        # AI tip
+        prompt = f"""You are a home renovation budget advisor for Indian homes.
+Total budget: Rs.{int(total_budget):,}
+Style preference: {style}
+Rooms: {', '.join([p['room'] for p in plan])}
+
+Give ONE practical budget tip in 2 sentences for this renovation. Be specific with numbers."""
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash", contents=prompt
+            )
+            ai_tip = response.text
+        except:
+            ai_tip = f"For a {style} style renovation with Rs.{int(total_budget):,} budget, focus on quality for high-usage areas like kitchen and bathroom first."
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_budget": total_budget,
+            "style":        style,
+            "plan":         plan,
+            "ai_tip":       ai_tip,
+            "total_rooms":  len(plan)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/budget/products", methods=["POST"])
+def budget_products():
+    try:
+        data       = request.get_json()
+        room_id    = data.get("room_id")
+        max_budget = float(data.get("max_budget", 50000))
+
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT p.*, r.name as room_name,
+               COALESCE(AVG(pr.rating), 0) as avg_rating,
+               COUNT(pr.id) as review_count
+               FROM products p
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN product_reviews pr ON pr.product_id = p.id
+               WHERE p.room_id = %s AND p.price <= %s
+               GROUP BY p.id, r.name
+               ORDER BY p.price DESC
+               LIMIT 10""",
+            (room_id, max_budget)
+        )
+        products = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"products": list(products)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
