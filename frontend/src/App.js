@@ -162,13 +162,14 @@ export default function App() {
   const [compareData, setCompareData]         = useState([]);
   const [compareLoading, setCompareLoading]   = useState(false);
   const [showCompareBar, setShowCompareBar]   = useState(false);
-  // Day 30 — Coupon
   const [couponCode, setCouponCode]           = useState("");
   const [couponData, setCouponData]           = useState(null);
   const [couponLoading, setCouponLoading]     = useState(false);
   const [couponError, setCouponError]         = useState("");
   const [showCoupons, setShowCoupons]         = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
+  // Day 31 — Recently Viewed
+  const [recentlyViewed, setRecentlyViewed]   = useState([]);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -185,10 +186,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user&&screen==="orders")      loadOrders();
-    if (user&&screen==="profile")     { loadProfile(); loadStyleProfile(); }
-    if (user&&screen==="wishlist")    loadWishlist();
-    if (screen==="recommendations")   loadRecommendations();
+    if (user&&screen==="orders")    loadOrders();
+    if (user&&screen==="profile")   { loadProfile(); loadStyleProfile(); }
+    if (user&&screen==="wishlist")  loadWishlist();
+    if (screen==="recommendations") loadRecommendations();
     trackPage(screen);
   }, [screen, user]);
 
@@ -196,7 +197,7 @@ export default function App() {
   useEffect(() => {
     if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); }
   }, [selectedProduct]);
-  useEffect(() => { if (user) loadWishlist(); }, [user]);
+  useEffect(() => { if (user) { loadWishlist(); loadRecentlyViewed(); } }, [user]);
   useEffect(() => { setShowCompareBar(compareList.length>0); }, [compareList]);
 
   const loadTopRated       = async () => { try { const r=await fetch(`${API}/api/top-rated`); const d=await r.json(); setTopRated(d.products||[]); } catch {} };
@@ -204,6 +205,16 @@ export default function App() {
   const loadProductReviews = async (id) => { try { const r=await fetch(`${API}/api/reviews/${id}`); const d=await r.json(); setProductReviews(d); } catch { setProductReviews(null); } };
   const loadProductGallery = async (id) => { try { const r=await fetch(`${API}/api/gallery/${id}`); const d=await r.json(); setProductGallery(d.images||[]); setGalleryIndex(0); } catch { setProductGallery([]); } };
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
+
+  // Day 31
+  const loadRecentlyViewed = async () => {
+    if (!user) return;
+    try {
+      const r=await fetch(`${API}/api/recently-viewed/${user.id}`);
+      const d=await r.json();
+      setRecentlyViewed(d.recently_viewed||[]);
+    } catch {}
+  };
 
   const loadWishlist = async () => {
     if (!user) return; setWishlistLoading(true);
@@ -489,7 +500,7 @@ export default function App() {
     const salePrice = saleDiscount>0 ? Math.round(p.price*(1-saleDiscount/100)) : null;
     return (
       <div style={{background:"white",borderRadius:12,padding:16,marginBottom:12,display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer"}}
-        onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");}}>
+        onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");loadRecentlyViewed();}}>
         <div style={{flexShrink:0,position:"relative"}}>
           {p.image_url?<img src={p.image_url} alt={p.name} style={{width:90,height:90,borderRadius:8,objectFit:"cover"}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/90x90/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:90,height:90,borderRadius:8,background:"#FFF3DC",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🏠</div>}
           {saleDiscount>0&&<div style={{position:"absolute",top:-4,left:-4,background:"#FF4444",color:"white",borderRadius:6,padding:"2px 5px",fontSize:10,fontWeight:700}}>{saleDiscount}% OFF</div>}
@@ -920,6 +931,7 @@ export default function App() {
           <div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>Select a room to renovate</div>
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Tap a room to see products</div>
+
             {sales.length>0&&(
               <div style={{marginBottom:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:10,color:"#BA7517"}}>🎉 Festival Sales Live Now!</div>
@@ -936,6 +948,7 @@ export default function App() {
                 </div>
               </div>
             )}
+
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {ROOMS.map(room=>(
                 <div key={room.id} onClick={()=>{setRoom(room);setScreen("products");track("view_room",room.id,null,room.name);}}
@@ -945,6 +958,26 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {/* RECENTLY VIEWED */}
+            {recentlyViewed.length>0&&(
+              <div style={{marginTop:16}}>
+                <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#555"}}>👁️ Recently Viewed</div>
+                <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
+                  {recentlyViewed.map(p=>(
+                    <div key={p.id} style={{flexShrink:0,width:130,background:"white",borderRadius:10,padding:10,cursor:"pointer",border:"1px solid #eee"}}
+                      onClick={()=>{track("view_product",p.room_id,p.id,p.name);setSelectedProduct(p);setScreen("product_detail");}}>
+                      {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:80,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/130x80/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:80,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>}
+                      <div style={{fontSize:11,fontWeight:600,marginTop:6,lineHeight:1.3}}>{p.name}</div>
+                      <div style={{fontSize:10,color:"#888",marginTop:2}}>{p.room_name}</div>
+                      <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                      <button onClick={e=>{e.stopPropagation();addToCart(p);}} style={{width:"100%",marginTop:4,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"3px 0",cursor:"pointer",fontSize:10}}>+ Cart</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {topRated.length>0&&(
               <div style={{marginTop:16}}>
                 <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>⭐ Top Rated Products</div>
@@ -960,11 +993,13 @@ export default function App() {
                 </div>
               </div>
             )}
+
             <div style={{background:"white",borderRadius:12,padding:16,marginTop:16}}>
               <div style={{fontWeight:600,marginBottom:8}}>💰 Your Budget</div>
               <input type="range" min={10000} max={500000} step={5000} value={budget} onChange={e=>setBudget(Number(e.target.value))} style={{width:"100%",accentColor:"#BA7517"}}/>
               <div style={{textAlign:"center",fontWeight:600,color:"#BA7517",fontSize:18}}>₹{budget.toLocaleString("en-IN")}</div>
             </div>
+
             {cart.length>0&&(
               <div style={{background:"#FFF3DC",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div><div style={{fontWeight:600,fontSize:14}}>🛒 {cart.length} items in cart</div><div style={{fontSize:13,color:"#BA7517"}}>₹{finalTotal.toLocaleString("en-IN")} total</div></div>
@@ -1092,6 +1127,21 @@ export default function App() {
             <div style={{fontSize:13,color:"#888",marginBottom:16}}>Based on your browsing history</div>
             {recLoading?<LoadingSpinner/>:(
               <>
+                {recentlyViewed.length>0&&(
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#555"}}>👁️ Recently Viewed</div>
+                    <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
+                      {recentlyViewed.map(p=>(
+                        <div key={p.id} style={{flexShrink:0,width:130,background:"white",borderRadius:10,padding:10,cursor:"pointer",border:"1px solid #eee"}}
+                          onClick={()=>{setSelectedProduct(p);setScreen("product_detail");}}>
+                          {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:80,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/130x80/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:80,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>}
+                          <div style={{fontSize:11,fontWeight:600,marginTop:6,lineHeight:1.3}}>{p.name}</div>
+                          <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {trending.length>0&&(
                   <div style={{marginBottom:20}}>
                     <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#BA7517"}}>🔥 Trending This Week</div>
@@ -1108,7 +1158,7 @@ export default function App() {
                   </div>
                 )}
                 {recommendations.length>0&&<div><div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"#0C447C"}}>💡 Based on Your Interests</div>{recommendations.map((p,i)=><ProductCard key={`${p.id}-${i}`} p={p}/>)}</div>}
-                {recommendations.length===0&&trending.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:40}}>✨</div><div style={{marginTop:8,fontWeight:500}}>No recommendations yet!</div><button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button></div>}
+                {recommendations.length===0&&trending.length===0&&recentlyViewed.length===0&&<div style={{textAlign:"center",padding:40,color:"#888"}}><div style={{fontSize:40}}>✨</div><div style={{marginTop:8,fontWeight:500}}>Browse products to see recommendations!</div><button onClick={()=>setScreen("home")} style={{marginTop:16,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:13,fontWeight:600}}>Browse Rooms →</button></div>}
               </>
             )}
           </div>
@@ -1189,7 +1239,7 @@ export default function App() {
                 <div style={{fontWeight:600,color:"#085041",marginTop:8}}>Order Placed!</div>
                 <div style={{fontSize:13,color:"#085041",marginTop:4}}>Order ID: #{orderSuccess.order_id}</div>
                 <div style={{fontSize:14,fontWeight:600,color:"#085041",marginTop:4}}>Total: ₹{Number(orderSuccess.grand_total).toLocaleString("en-IN")}</div>
-                {orderSuccess.discount>0&&<div style={{fontSize:13,color:"#085041",marginTop:2}}>You saved ₹{parseInt(orderSuccess.discount).toLocaleString("en-IN")} with coupon! 🎟️</div>}
+                {orderSuccess.discount>0&&<div style={{fontSize:13,color:"#085041",marginTop:2}}>You saved ₹{parseInt(orderSuccess.discount).toLocaleString("en-IN")} 🎟️</div>}
                 <button onClick={()=>{setOrderSuccess(null);setScreen("orders");}} style={{marginTop:12,background:"#1D9E75",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13}}>View Orders →</button>
               </div>
             )}
@@ -1202,8 +1252,6 @@ export default function App() {
             ))}
             {cart.length>0&&(
               <div style={{background:"white",borderRadius:12,padding:16,marginTop:8}}>
-
-                {/* COUPON SECTION */}
                 <div style={{marginBottom:16}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                     <div style={{fontWeight:600,fontSize:14}}>🎟️ Apply Coupon</div>
@@ -1242,13 +1290,10 @@ export default function App() {
                   )}
                   {couponError&&<div style={{color:"#c00",fontSize:12,marginTop:6}}>{couponError}</div>}
                 </div>
-
-                {/* BILL SUMMARY */}
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14}}><span>Subtotal</span><span>₹{subtotal.toLocaleString("en-IN")}</span></div>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14,color:"#666"}}><span>GST (18%)</span><span>₹{gst.toLocaleString("en-IN")}</span></div>
                 {couponData&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14,color:"#085041",fontWeight:600}}><span>🎟️ Coupon Discount</span><span>- ₹{parseInt(couponData.discount).toLocaleString("en-IN")}</span></div>}
                 <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:16,borderTop:"1px solid #eee",paddingTop:10}}><span>Grand Total</span><span style={{color:"#BA7517"}}>₹{finalTotal.toLocaleString("en-IN")}</span></div>
-
                 <button onClick={placeOrder} disabled={orderPlacing} style={{width:"100%",marginTop:14,background:orderPlacing?"#ccc":"#1D9E75",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:orderPlacing?"not-allowed":"pointer"}}>{orderPlacing?"⏳ Placing...":"✅ Place Order"}</button>
                 <button onClick={downloadPDF} disabled={pdfLoading} style={{width:"100%",marginTop:10,background:pdfLoading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:pdfLoading?"not-allowed":"pointer"}}>{pdfLoading?"⏳ Generating...":"📄 Download PDF"}</button>
                 <button onClick={sendWhatsApp} style={{width:"100%",marginTop:10,background:"#25D366",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:"pointer"}}>💬 WhatsApp Quote</button>
@@ -1260,4 +1305,4 @@ export default function App() {
       </div>
     </div>
   );
-} 
+}

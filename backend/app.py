@@ -1450,6 +1450,48 @@ def export_csv():
         return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+# ── RECENTLY VIEWED ──
+
+@app.route("/api/recently-viewed/<int:user_id>", methods=["GET"])
+def get_recently_viewed(user_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        cursor.execute(
+            """SELECT DISTINCT ON (p.id)
+               p.*, r.name as room_name,
+               COALESCE(AVG(pr.rating),0) as avg_rating,
+               COUNT(pr.id) as review_count,
+               MAX(ua.created_at) as viewed_at
+               FROM user_activity ua
+               JOIN products p ON ua.product_id = p.id
+               JOIN rooms r ON p.room_id = r.id
+               LEFT JOIN product_reviews pr ON pr.product_id = p.id
+               WHERE ua.user_id = %s
+               AND ua.action = 'view_product'
+               AND ua.product_id IS NOT NULL
+               GROUP BY p.id, r.name, ua.created_at
+               ORDER BY p.id, ua.created_at DESC
+               LIMIT 10""",
+            (user_id,)
+        )
+        products = cursor.fetchall()
+
+        # Sort by most recently viewed
+        result = []
+        for p in products:
+            d = dict(p)
+            d["viewed_at"] = str(p["viewed_at"])
+            result.append(d)
+
+        result.sort(key=lambda x: x["viewed_at"], reverse=True)
+        cursor.close()
+        conn.close()
+        return jsonify({"recently_viewed": result[:10]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
