@@ -192,7 +192,6 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
     <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div style={{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto",paddingBottom:30}}>
 
-        {/* Header */}
         <div style={{padding:"20px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
           <div>
             <div style={{fontWeight:700,fontSize:17}}>💰 Smart Budget Planner</div>
@@ -201,14 +200,12 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer"}}>✕</button>
         </div>
 
-        {/* Progress Bar */}
         <div style={{margin:"12px 20px",background:"#f0f0f0",borderRadius:4,height:4}}>
           <div style={{height:"100%",background:"#BA7517",borderRadius:4,width:`${(step/3)*100}%`,transition:"width 0.3s"}}/>
         </div>
 
         <div style={{padding:"0 20px"}}>
 
-          {/* STEP 1 — Budget & Style */}
           {step===1&&(
             <div>
               <div style={{fontWeight:600,fontSize:15,marginBottom:16,color:"#BA7517"}}>Set Your Budget & Style</div>
@@ -249,7 +246,6 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
             </div>
           )}
 
-          {/* STEP 2 — Select Rooms */}
           {step===2&&(
             <div>
               <div style={{fontWeight:600,fontSize:15,marginBottom:4,color:"#BA7517"}}>Select Rooms to Renovate</div>
@@ -286,13 +282,11 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
             </div>
           )}
 
-          {/* STEP 3 — Plan Results */}
           {step===3&&plan&&!selectedRoomPlan&&(
             <div>
               <div style={{fontWeight:600,fontSize:15,marginBottom:4,color:"#BA7517"}}>Your Budget Plan 🎯</div>
               <div style={{fontSize:12,color:"#888",marginBottom:12}}>Total: ₹{Number(plan.total_budget).toLocaleString("en-IN")} across {plan.total_rooms} rooms</div>
 
-              {/* AI Tip */}
               {plan.ai_tip&&(
                 <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:12,padding:16,marginBottom:16,color:"white"}}>
                   <div style={{fontWeight:600,fontSize:13,marginBottom:6}}>✨ AI Budget Tip</div>
@@ -300,7 +294,6 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
                 </div>
               )}
 
-              {/* Room Allocations */}
               {plan.plan?.map((room,i)=>(
                 <div key={i} style={{background:"white",borderRadius:12,border:"1px solid #eee",padding:14,marginBottom:10,cursor:"pointer"}}
                   onClick={()=>loadRoomProducts(room)}>
@@ -317,7 +310,6 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
                       <div style={{fontSize:11,color:"#888"}}>{room.percentage}% of budget</div>
                     </div>
                   </div>
-                  {/* Progress Bar */}
                   <div style={{background:"#f0f0f0",borderRadius:4,height:6,marginBottom:6}}>
                     <div style={{height:"100%",background:room.is_feasible?"#BA7517":"#FF4444",borderRadius:4,width:`${room.percentage}%`}}/>
                   </div>
@@ -349,7 +341,6 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
             </div>
           )}
 
-          {/* Room Products View */}
           {step===3&&selectedRoomPlan&&(
             <div>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
@@ -385,6 +376,88 @@ const BudgetPlanner = ({onClose, onAddToCart}) => {
             </div>
           )}
 
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── LOYALTY POINTS COMPONENT (Day 35 — NEW) ──
+const LoyaltyModal = ({user, onClose}) => {
+  const [loyalty, setLoyalty] = useState(null);
+  const [loadingLoyalty, setLoadingLoyalty] = useState(true);
+
+  const loadLoyalty = async () => {
+    setLoadingLoyalty(true);
+    try {
+      const r = await fetch(`${API}/api/loyalty/${user?.id||1}`);
+      const d = await r.json();
+      setLoyalty(d.loyalty);
+    } catch { setLoyalty(null); }
+    setLoadingLoyalty(false);
+  };
+
+  useEffect(()=>{ loadLoyalty(); }, []);
+
+  const typeIcon  = (type) => type==="earn" ? "➕" : "➖";
+  const typeColor = (type) => type==="earn" ? "#085041" : "#c00";
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div style={{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",paddingBottom:30}}>
+        <div style={{padding:"20px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:17}}>🏆 Loyalty Points</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:"0 20px"}}>
+          {loadingLoyalty?<LoadingSpinner/>:loyalty?(
+            <>
+              <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:16,padding:24,marginBottom:16,textAlign:"center",color:"white"}}>
+                <div style={{fontSize:13,opacity:0.85,marginBottom:6}}>Your Points Balance</div>
+                <div style={{fontSize:42,fontWeight:800}}>{loyalty.points}</div>
+                <div style={{fontSize:13,opacity:0.9,marginTop:6}}>= ₹{((loyalty.points/100)*10).toFixed(0)} discount value</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:16}}>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,opacity:0.8}}>Total Earned</div>
+                    <div style={{fontWeight:700,fontSize:16}}>{loyalty.total_earned}</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:10}}>
+                    <div style={{fontSize:11,opacity:0.8}}>Total Redeemed</div>
+                    <div style={{fontWeight:700,fontSize:16}}>{loyalty.total_redeemed}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{background:"#E6F1FB",borderRadius:12,padding:14,marginBottom:16}}>
+                <div style={{fontWeight:600,fontSize:13,color:"#0C447C",marginBottom:8}}>💡 How to Earn Points</div>
+                <div style={{fontSize:12,color:"#0C447C",lineHeight:1.6}}>
+                  • Every ₹100 spent = 10 points<br/>
+                  • Write a product review = 50 bonus points<br/>
+                  • 100 points = ₹10 discount at checkout
+                </div>
+              </div>
+
+              <div style={{fontWeight:600,fontSize:14,marginBottom:10}}>📜 Points History</div>
+              {(!loyalty.history || loyalty.history.length===0) ? (
+                <div style={{textAlign:"center",padding:24,color:"#888",fontSize:13}}>No history yet. Start shopping to earn points!</div>
+              ) : (
+                loyalty.history.map((h,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"0.5px solid #f0f0f0"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span>{typeIcon(h.type)}</span>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:500}}>{h.description}</div>
+                        <div style={{fontSize:11,color:"#888",marginTop:2}}>{new Date(h.created_at).toLocaleDateString("en-IN")}</div>
+                      </div>
+                    </div>
+                    <div style={{fontWeight:700,fontSize:14,color:typeColor(h.type)}}>{h.points>0?"+":""}{h.points}</div>
+                  </div>
+                ))
+              )}
+            </>
+          ):(
+            <div style={{textAlign:"center",padding:40,color:"#888"}}>Could not load points. Try again later.</div>
+          )}
         </div>
       </div>
     </div>
@@ -493,8 +566,13 @@ export default function App() {
   const [shareCopied, setShareCopied]         = useState(false);
   const [showEMI, setShowEMI]                 = useState(false);
   const [emiProduct, setEmiProduct]           = useState(null);
-  // Day 34 — Budget Planner
   const [showBudgetPlanner, setShowBudgetPlanner] = useState(false);
+  // Day 35 — Loyalty Points (NEW)
+  const [showLoyalty, setShowLoyalty]         = useState(false);
+  const [loyaltyPoints, setLoyaltyPoints]     = useState(0);
+  const [usePointsAtCheckout, setUsePointsAtCheckout] = useState(0);
+  const [pointsDiscount, setPointsDiscount]   = useState(0);
+  const [redeemingPoints, setRedeemingPoints] = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -511,7 +589,7 @@ export default function App() {
 
   useEffect(() => {
     if (user&&screen==="orders")    loadOrders();
-    if (user&&screen==="profile")   { loadProfile(); loadStyleProfile(); }
+    if (user&&screen==="profile")   { loadProfile(); loadStyleProfile(); loadLoyaltyPoints(); }
     if (user&&screen==="wishlist")  loadWishlist();
     if (screen==="recommendations") loadRecommendations();
     trackPage(screen);
@@ -519,7 +597,7 @@ export default function App() {
 
   useEffect(() => { if (uploadScreen) loadAllProducts(); }, [uploadScreen]);
   useEffect(() => { if (selectedProduct) { loadProductReviews(selectedProduct.id); loadProductGallery(selectedProduct.id); } }, [selectedProduct]);
-  useEffect(() => { if (user) { loadWishlist(); loadRecentlyViewed(); } }, [user]);
+  useEffect(() => { if (user) { loadWishlist(); loadRecentlyViewed(); loadLoyaltyPoints(); } }, [user]);
   useEffect(() => { setShowCompareBar(compareList.length>0); }, [compareList]);
 
   const loadTopRated       = async () => { try { const r=await fetch(`${API}/api/top-rated`); const d=await r.json(); setTopRated(d.products||[]); } catch {} };
@@ -528,6 +606,38 @@ export default function App() {
   const loadProductGallery = async (id) => { try { const r=await fetch(`${API}/api/gallery/${id}`); const d=await r.json(); setProductGallery(d.images||[]); setGalleryIndex(0); } catch { setProductGallery([]); } };
   const loadSales          = async () => { try { const r=await fetch(`${API}/api/sales`); const d=await r.json(); setSales(d.sales||[]); } catch {} };
   const loadRecentlyViewed = async () => { if (!user) return; try { const r=await fetch(`${API}/api/recently-viewed/${user.id}`); const d=await r.json(); setRecentlyViewed(d.recently_viewed||[]); } catch {} };
+
+  // ── Day 35 — Loyalty Points functions (NEW) ──
+  const loadLoyaltyPoints = async () => {
+    if (!user) return;
+    try {
+      const r = await fetch(`${API}/api/loyalty/${user.id}`);
+      const d = await r.json();
+      setLoyaltyPoints(d.loyalty?.points || 0);
+    } catch { setLoyaltyPoints(0); }
+  };
+
+  const applyPointsAtCheckout = async () => {
+    if (usePointsAtCheckout<=0) { alert("Enter points to use!"); return; }
+    if (usePointsAtCheckout>loyaltyPoints) { alert(`You only have ${loyaltyPoints} points!`); return; }
+    setRedeemingPoints(true);
+    try {
+      const r = await fetch(`${API}/api/loyalty/redeem`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,points:usePointsAtCheckout})});
+      const d = await r.json();
+      if (d.status==="ok") {
+        setPointsDiscount(d.discount);
+        setLoyaltyPoints(prev=>prev-usePointsAtCheckout);
+        alert(d.message);
+      } else alert(d.error||"Failed to redeem points");
+    } catch(err) { alert("Failed: "+err.message); }
+    setRedeemingPoints(false);
+  };
+
+  const removePointsDiscount = () => {
+    setPointsDiscount(0);
+    setLoyaltyPoints(prev=>prev+usePointsAtCheckout);
+    setUsePointsAtCheckout(0);
+  };
 
   const openShare      = (product) => { setShareProduct(product); setShowShareModal(true); setShareCopied(false); track("share_product",product.room_id,product.id,product.name); };
   const getShareText   = (p) => { if (!p) return ""; return `🏠 HomeBot AI\n\n${p.name}\nRoom: ${p.room_name||""}\nBrand: ${p.brand||""}\n💰 ₹${Number(p.price).toLocaleString("en-IN")} / ${p.unit||""}\n`+(p.material?`Material: ${p.material}\n`:"")+`\n✨ HomeBot AI — India's #1 Interior Design App`; };
@@ -564,7 +674,34 @@ export default function App() {
   const loadRecommendations = async () => { setRecLoading(true); try { const r=await fetch(`${API}/api/recommendations/user/${user?.id||1}`); const d=await r.json(); setRecommendations(d.recommendations||[]); } catch { setRecommendations([]); } try { const r=await fetch(`${API}/api/trending`); const d=await r.json(); setTrending(d.trending||[]); } catch { setTrending([]); } setRecLoading(false); };
 
   const uploadGalleryImage = async (productId) => { if (!galleryFile) { alert("Select image!"); return; } setGalleryUploading(true); try { const fd=new FormData(); fd.append("file",galleryFile); fd.append("sort_order",productGallery.length); fd.append("image_type","gallery"); const r=await fetch(`${API}/api/gallery/${productId}`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { alert("✅ Added!"); setGalleryFile(null); setShowGalleryUpload(false); loadProductGallery(productId); } else alert("Error: "+d.error); } catch(err) { alert("Failed"); } setGalleryUploading(false); };
-  const submitReview = async () => { if (!selectedProduct) return; let photoUrl=""; if (reviewPhoto) { try { const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") photoUrl=d.image_url; } catch {} } try { const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Submitted!"); setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName(""); loadProductReviews(selectedProduct.id); } } catch(err) { alert("Failed"); } };
+
+  // Day 35 — review submit now also awards bonus points
+  const submitReview = async () => {
+    if (!selectedProduct) return;
+    let photoUrl="";
+    if (reviewPhoto) {
+      try {
+        const fd=new FormData(); fd.append("file",reviewPhoto); fd.append("product_id",`review_${selectedProduct.id}_${Date.now()}`);
+        const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json();
+        if (d.status==="ok") photoUrl=d.image_url;
+      } catch {}
+    }
+    try {
+      const r=await fetch(`${API}/api/reviews`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({product_id:selectedProduct.id,user_id:user?.id||1,rating:reviewRating,review_text:reviewText,review_photo:photoUrl,is_anonymous:isAnonymous,display_name:isAnonymous?"Anonymous":(displayName||user?.name||"User")})});
+      const d=await r.json();
+      if (d.status==="ok") {
+        try {
+          const br = await fetch(`${API}/api/loyalty/review-bonus/${user?.id||1}`,{method:"POST"});
+          const bd = await br.json();
+          alert(bd.status==="ok" ? ("✅ Submitted! "+bd.message) : "✅ Submitted!");
+          loadLoyaltyPoints();
+        } catch { alert("✅ Submitted!"); }
+        setShowReviewForm(false); setReviewText(""); setReviewRating(5); setReviewPhoto(null); setIsAnonymous(false); setDisplayName("");
+        loadProductReviews(selectedProduct.id);
+      }
+    } catch(err) { alert("Failed"); }
+  };
+
   const submitChatbotRating = async () => { try { const r=await fetch(`${API}/api/chatbot/rate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,rating:chatbotRating,feedback:chatbotFeedback,session_msg:lastAiMessage})}); const d=await r.json(); if (d.status==="ok") { alert("✅ Thank you!"); setShowChatbotRating(false); setChatbotFeedback(""); setChatbotRating(0); } } catch(err) { alert("Failed"); } };
   const uploadImage = async () => { if (!uploadFile||!uploadProductId) { alert("Select product and image!"); return; } setUploadLoading(true); try { const fd=new FormData(); fd.append("file",uploadFile); fd.append("product_id",uploadProductId); const r=await fetch(`${API}/api/upload-image`,{method:"POST",body:fd}); const d=await r.json(); if (d.status==="ok") { setUploadSuccess(d.image_url); alert("✅ Uploaded!"); } else alert("Error: "+d.error); } catch(err) { alert("Upload failed"); } setUploadLoading(false); };
   const trackOrderFn = async (orderId) => { setTrackLoading(true); try { const r=await fetch(`${API}/api/track/${orderId}`); const d=await r.json(); setTrackedOrder(d.order); setScreen("track"); } catch { alert("Could not track"); } setTrackLoading(false); };
@@ -574,9 +711,24 @@ export default function App() {
   const loadAvailableCoupons = async () => { try { const r=await fetch(`${API}/api/coupons`); const d=await r.json(); setAvailableCoupons(d.coupons||[]); } catch {} };
   const removeCoupon = () => { setCouponData(null); setCouponCode(""); setCouponError(""); };
 
+  // Day 35 — placeOrder now applies points discount + earns new points after order
   const placeOrder = async () => {
-    if (cart.length===0) { alert("Cart is empty!"); return; } setOrderPlacing(true);
-    try { const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home",coupon_id:couponData?.coupon_id||null,coupon_discount:couponData?.discount||0})}); const d=await r.json(); if (d.status==="ok") { setOrderSuccess(d); setCart([]); setCouponData(null); setCouponCode(""); track("place_order",null,null,`Order #${d.order_id}`); } else alert("Order failed: "+d.error); } catch(err) { alert("Failed"); }
+    if (cart.length===0) { alert("Cart is empty!"); return; }
+    setOrderPlacing(true);
+    try {
+      const totalDiscount = (couponData?.discount||0) + (pointsDiscount||0);
+      const r=await fetch(`${API}/api/orders`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,items:cart.map(i=>({id:i.id,price:Number(i.price),qty:Number(i.qty),name:i.name})),room:selectedRoom?.name||"Home",coupon_id:couponData?.coupon_id||null,coupon_discount:totalDiscount})});
+      const d=await r.json();
+      if (d.status==="ok") {
+        setOrderSuccess(d); setCart([]); setCouponData(null); setCouponCode(""); setPointsDiscount(0); setUsePointsAtCheckout(0);
+        track("place_order",null,null,`Order #${d.order_id}`);
+        try {
+          const lr = await fetch(`${API}/api/loyalty/earn`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:user?.id||1,order_id:d.order_id,amount_paid:d.grand_total})});
+          const ld = await lr.json();
+          if (ld.status==="ok") loadLoyaltyPoints();
+        } catch {}
+      } else alert("Order failed: "+d.error);
+    } catch(err) { alert("Failed"); }
     setOrderPlacing(false);
   };
 
@@ -587,7 +739,7 @@ export default function App() {
   const subtotal   = cart.reduce((s,i)=>s+i.price*i.qty,0);
   const gst        = Math.round(subtotal*0.18);
   const grandTotal = subtotal+gst;
-  const finalTotal = Math.max(0, grandTotal-(couponData?.discount||0));
+  const finalTotal = Math.max(0, grandTotal-(couponData?.discount||0)-(pointsDiscount||0));
 
   const sendMessage = async () => { if (!input.trim()) return; const userMsg=input; setInput(""); setMessages(m=>[...m,{role:"user",text:userMsg}]); setLoading(true); track("chat_message",null,null,userMsg); try { const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`; const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})}); const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply); setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]); setTimeout(()=>setShowChatbotRating(true),3000); } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); } setLoading(false); };
   const downloadPDF = async () => { if (cart.length===0) { alert("Add products first!"); return; } setPdfLoading(true); try { const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})}); if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; } const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"})); const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100); } catch(err) { alert("PDF failed"); } setPdfLoading(false); };
@@ -990,10 +1142,16 @@ export default function App() {
       <ShareModal/>
       {showEMI&&<EMICalculator price={emiProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
       {showBudgetPlanner&&<BudgetPlanner onClose={()=>setShowBudgetPlanner(false)} onAddToCart={addToCart}/>}
+      {showLoyalty&&<LoyaltyModal user={user} onClose={()=>{setShowLoyalty(false);loadLoyaltyPoints();}}/>}
 
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><div style={{color:"white",fontWeight:600,fontSize:18}}>🏠 HomeBot AI</div><div style={{color:"#FFE0A0",fontSize:12}}>{user?`Welcome, ${user.name}!`:"Interior Design Assistant"}</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {user&&(
+            <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:3}} onClick={()=>setShowLoyalty(true)}>
+              🏆 {loyaltyPoints}
+            </div>
+          )}
           <div style={{background:"white",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#BA7517",fontWeight:500,cursor:"pointer",position:"relative"}} onClick={()=>setScreen("wishlist")}>
             ❤️{wishlistIds.size>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#FF4444",color:"white",borderRadius:"50%",width:16,height:16,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{wishlistIds.size}</span>}
           </div>
@@ -1362,12 +1520,17 @@ export default function App() {
                   <div style={{fontWeight:600,fontSize:18,marginTop:10}}>{profile.user.name}</div>
                   <div style={{fontSize:13,color:"#888",marginTop:4}}>{profile.user.email}</div>
                   <div style={{fontSize:13,color:"#888",marginTop:2}}>📍 {profile.user.city||"City not set"}</div>
+                  <div onClick={()=>setShowLoyalty(true)} style={{marginTop:10,display:"inline-flex",alignItems:"center",gap:6,background:"#FFF3DC",border:"1px solid #BA7517",borderRadius:20,padding:"6px 16px",cursor:"pointer"}}>
+                    <span style={{fontSize:16}}>🏆</span>
+                    <span style={{fontWeight:700,color:"#BA7517",fontSize:14}}>{loyaltyPoints} Points</span>
+                  </div>
                   <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12,flexWrap:"wrap"}}>
                     <button onClick={()=>setEditProfile(true)} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>✏️ Edit</button>
                     <button onClick={()=>setUploadScreen(true)} style={{background:"#E6F1FB",color:"#0C447C",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>📸 Images</button>
                     <button onClick={()=>setShowStyleSetup(true)} style={{background:"#FFF3DC",color:"#BA7517",border:"1px solid #BA7517",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>🎨 Style</button>
                     <button onClick={()=>setScreen("wishlist")} style={{background:"#FCEBEB",color:"#c00",border:"1px solid #fcc",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>❤️ Wishlist ({wishlistIds.size})</button>
                     <button onClick={()=>setShowBudgetPlanner(true)} style={{background:"#E1F5EE",color:"#085041",border:"1px solid #1D9E75",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>💰 Budget Plan</button>
+                    <button onClick={()=>setScreen("orders")} style={{background:"#EEEDFE",color:"#26215C",border:"1px solid #26215C",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>📦 Orders</button>
                   </div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
@@ -1407,6 +1570,7 @@ export default function App() {
                 <div style={{fontSize:13,color:"#085041",marginTop:4}}>Order ID: #{orderSuccess.order_id}</div>
                 <div style={{fontSize:14,fontWeight:600,color:"#085041",marginTop:4}}>Total: ₹{Number(orderSuccess.grand_total).toLocaleString("en-IN")}</div>
                 {orderSuccess.discount>0&&<div style={{fontSize:13,color:"#085041",marginTop:2}}>You saved ₹{parseInt(orderSuccess.discount).toLocaleString("en-IN")} 🎟️</div>}
+                <div style={{fontSize:13,color:"#BA7517",fontWeight:600,marginTop:6}}>🏆 Points earned on this order!</div>
                 <button onClick={()=>{setOrderSuccess(null);setScreen("orders");}} style={{marginTop:12,background:"#1D9E75",color:"white",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:13}}>View Orders →</button>
               </div>
             )}
@@ -1456,9 +1620,33 @@ export default function App() {
                   )}
                   {couponError&&<div style={{color:"#c00",fontSize:12,marginTop:6}}>{couponError}</div>}
                 </div>
+
+                {/* Day 35 — Redeem Loyalty Points (NEW) */}
+                <div style={{marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontWeight:600,fontSize:14}}>🏆 Use Loyalty Points</div>
+                    <span style={{fontSize:12,color:"#888"}}>Balance: {loyaltyPoints} pts</span>
+                  </div>
+                  {pointsDiscount<=0?(
+                    <div style={{display:"flex",gap:8}}>
+                      <input type="number" min={0} max={loyaltyPoints} value={usePointsAtCheckout||""} onChange={e=>setUsePointsAtCheckout(Number(e.target.value))} placeholder="Enter points to redeem" style={{flex:1,padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:13,outline:"none"}}/>
+                      <button onClick={applyPointsAtCheckout} disabled={redeemingPoints||loyaltyPoints===0} style={{background:redeemingPoints||loyaltyPoints===0?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:redeemingPoints||loyaltyPoints===0?"not-allowed":"pointer",fontSize:13,fontWeight:600}}>{redeemingPoints?"...":"Redeem"}</button>
+                    </div>
+                  ):(
+                    <div style={{background:"#FFF3DC",borderRadius:8,padding:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:13,color:"#BA7517",fontWeight:600}}>🏆 {usePointsAtCheckout} points redeemed</div>
+                        <div style={{fontSize:12,color:"#BA7517",marginTop:2}}>You save ₹{pointsDiscount.toFixed(0)}</div>
+                      </div>
+                      <button onClick={removePointsDiscount} style={{background:"#FCEBEB",color:"#c00",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Remove</button>
+                    </div>
+                  )}
+                </div>
+
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14}}><span>Subtotal</span><span>₹{subtotal.toLocaleString("en-IN")}</span></div>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14,color:"#666"}}><span>GST (18%)</span><span>₹{gst.toLocaleString("en-IN")}</span></div>
                 {couponData&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14,color:"#085041",fontWeight:600}}><span>🎟️ Coupon Discount</span><span>- ₹{parseInt(couponData.discount).toLocaleString("en-IN")}</span></div>}
+                {pointsDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:14,color:"#BA7517",fontWeight:600}}><span>🏆 Points Discount</span><span>- ₹{pointsDiscount.toFixed(0)}</span></div>}
                 <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:16,borderTop:"1px solid #eee",paddingTop:10}}><span>Grand Total</span><span style={{color:"#BA7517"}}>₹{finalTotal.toLocaleString("en-IN")}</span></div>
                 <button onClick={placeOrder} disabled={orderPlacing} style={{width:"100%",marginTop:14,background:orderPlacing?"#ccc":"#1D9E75",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:orderPlacing?"not-allowed":"pointer"}}>{orderPlacing?"⏳ Placing...":"✅ Place Order"}</button>
                 <button onClick={downloadPDF} disabled={pdfLoading} style={{width:"100%",marginTop:10,background:pdfLoading?"#ccc":"#BA7517",color:"white",border:"none",borderRadius:10,padding:14,fontSize:15,fontWeight:600,cursor:pdfLoading?"not-allowed":"pointer"}}>{pdfLoading?"⏳ Generating...":"📄 Download PDF"}</button>

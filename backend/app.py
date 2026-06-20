@@ -8,6 +8,7 @@ from google import genai
 from langdetect import detect
 from deep_translator import GoogleTranslator
 import io
+import json
 
 load_dotenv()
 
@@ -1721,6 +1722,349 @@ def budget_products():
         conn.close()
         return jsonify({"products": list(products)})
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# ── LOYALTY POINTS ──
+@app.route("/api/loyalty/<int:user_id>", methods=["GET"])
+def get_loyalty(user_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute(
+            "SELECT * FROM loyalty_points WHERE user_id=%s",
+            (user_id,)
+        )
+        points = cursor.fetchone()
+        if not points:
+            cursor.execute(
+                "INSERT INTO loyalty_points (user_id,points,total_earned) VALUES (%s,100,100) RETURNING *",
+                (user_id,)
+            )
+            points = cursor.fetchone()
+            conn.commit()
+        cursor.execute(
+            "SELECT * FROM points_history WHERE user_id=%s ORDER BY created_at DESC LIMIT 10",
+            (user_id,)
+        )
+        history = cursor.fetchall()
+        result  = dict(points)
+        result["history"] = []
+        for h in history:
+            d = dict(h)
+            d["created_at"] = str(h["created_at"])
+            result["history"].append(d)
+        cursor.close(); conn.close()
+        return jsonify({"status":"ok","loyalty":result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/loyalty/earn", methods=["POST"])
+def earn_points():
+    try:
+        data        = request.get_json()
+        user_id     = data.get("user_id", 1)
+        order_id    = data.get("order_id")
+        amount_paid = float(data.get("amount_paid", 0))
+        points_earned = int(amount_paid / 100) * 10
+        if points_earned <= 0:
+            points_earned = 1
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO loyalty_points (user_id,points,total_earned)
+               VALUES (%s,%s,%s)
+               ON CONFLICT (user_id) DO UPDATE
+               SET points=loyalty_points.points+%s,
+                   total_earned=loyalty_points.total_earned+%s,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (user_id, points_earned, points_earned, points_earned, points_earned)
+        )
+        cursor.execute(
+            """INSERT INTO points_history
+               (user_id,points,type,description,order_id)
+               VALUES (%s,%s,'earn','Points earned on order #%s',%s)""",
+            (user_id, points_earned, order_id, order_id)
+        )
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({
+            "status": "ok",
+            "points_earned": points_earned,
+            "message": f"🏆 You earned {points_earned} points!"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/loyalty/redeem", methods=["POST"])
+def redeem_points():
+    try:
+        data         = request.get_json()
+        user_id      = data.get("user_id", 1)
+        points_to_use = int(data.get("points", 0))
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute(
+            "SELECT points FROM loyalty_points WHERE user_id=%s",
+            (user_id,)
+        )
+        loyalty = cursor.fetchone()
+        if not loyalty:
+            cursor.close(); conn.close()
+            return jsonify({"error": "No points found"}), 404
+        available = loyalty["points"]
+        if points_to_use > available:
+            cursor.close(); conn.close()
+            return jsonify({"error": f"Only {available} points available!"}), 400
+        discount = (points_to_use / 100) * 10
+        cursor.execute(
+            """UPDATE loyalty_points
+               SET points=points-%s,
+                   total_redeemed=total_redeemed+%s,
+                   updated_at=CURRENT_TIMESTAMP
+               WHERE user_id=%s""",
+            (points_to_use, points_to_use, user_id)
+        )
+        cursor.execute(
+            """INSERT INTO points_history
+               (user_id,points,type,description)
+               VALUES (%s,%s,'redeem','Points redeemed for discount')""",
+            (user_id, -points_to_use)
+        )
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({
+            "status":       "ok",
+            "points_used":  points_to_use,
+            "discount":     discount,
+            "message":      f"✅ {points_to_use} points redeemed! You save ₹{discount:.0f}"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/loyalty/review-bonus/<int:user_id>", methods=["POST"])
+def review_bonus(user_id):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO loyalty_points (user_id,points,total_earned)
+               VALUES (%s,50,50)
+               ON CONFLICT (user_id) DO UPDATE
+               SET points=loyalty_points.points+50,
+                   total_earned=loyalty_points.total_earned+50,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (user_id,)
+        )
+        cursor.execute(
+            """INSERT INTO points_history
+               (user_id,points,type,description)
+               VALUES (%s,50,'earn','Bonus points for writing a review')""",
+            (user_id,)
+        )
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({
+            "status":  "ok",
+            "message": "🎉 50 bonus points for your review!"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+# ── WHATSAPP CHATBOT (Day 36 — Multi-language) ──
+def wa_get_session(phone):
+    conn   = get_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("SELECT * FROM whatsapp_sessions WHERE phone_number=%s", (phone,))
+    session = cursor.fetchone()
+    if not session:
+        cursor.execute(
+            "INSERT INTO whatsapp_sessions (phone_number) VALUES (%s) RETURNING *",
+            (phone,)
+        )
+        session = cursor.fetchone()
+        conn.commit()
+    cursor.close(); conn.close()
+    return dict(session)
+
+def wa_update_session(phone, step=None, context=None):
+    conn   = get_db()
+    cursor = conn.cursor()
+    if step is not None and context is not None:
+        cursor.execute(
+            "UPDATE whatsapp_sessions SET current_step=%s, context=%s, last_message_at=CURRENT_TIMESTAMP WHERE phone_number=%s",
+            (step, json.dumps(context), phone)
+        )
+    elif step is not None:
+        cursor.execute(
+            "UPDATE whatsapp_sessions SET current_step=%s, last_message_at=CURRENT_TIMESTAMP WHERE phone_number=%s",
+            (step, phone)
+        )
+    conn.commit(); cursor.close(); conn.close()
+
+def wa_log_message(phone, direction, text):
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO whatsapp_messages (phone_number,direction,message_text) VALUES (%s,%s,%s)",
+            (phone, direction, text)
+        )
+        conn.commit(); cursor.close(); conn.close()
+    except: pass
+
+def wa_send(to_number, body):
+    from twilio.rest import Client
+    tc = Client(os.getenv("TWILIO_SID"), os.getenv("TWILIO_TOKEN"))
+    tc.messages.create(
+        from_=os.getenv("TWILIO_WHATSAPP"),
+        to=to_number,
+        body=body
+    )
+    wa_log_message(to_number, "out", body)
+
+def wa_detect_lang(text):
+    try:
+        lang = detect(text)
+        if lang not in LANGUAGE_MAP:
+            return "en"
+        return lang
+    except:
+        return "en"
+
+def wa_translate_out(text, target_lang):
+    """Translate an English reply into the customer's detected language."""
+    if target_lang == "en":
+        return text
+    return translate(text, "en", target_lang)
+
+@app.route("/api/whatsapp/webhook", methods=["POST"])
+def whatsapp_webhook():
+    try:
+        incoming_msg = request.form.get("Body", "").strip()
+        from_number  = request.form.get("From", "")
+        wa_log_message(from_number, "in", incoming_msg)
+
+        session   = wa_get_session(from_number)
+        step      = session["current_step"]
+        context   = session["context"] or {}
+
+        # Detect language from this message; remember it in session context
+        detected_lang = wa_detect_lang(incoming_msg)
+        if detected_lang != "en":
+            context["lang"] = detected_lang
+        user_lang = context.get("lang", "en")
+
+        # Translate incoming message to English for keyword matching
+        if detected_lang != "en":
+            msg_lower = translate(incoming_msg, detected_lang, "en").lower().strip()
+        else:
+            msg_lower = incoming_msg.lower().strip()
+
+        # Global commands - work at any step
+        if msg_lower in ["hi", "hello", "start", "menu", "namaste"]:
+            reply_en = ("🏠 *Namaste! Welcome to HomeBot AI*\n\n"
+                        "I can help you with:\n"
+                        "1️⃣ Browse products by room\n"
+                        "2️⃣ Search for a product\n"
+                        "3️⃣ Get a quotation\n"
+                        "4️⃣ Track my order\n\n"
+                        "Reply with a number (1-4) or just tell me what you need! "
+                        "(You can also message me in Hindi, Bengali, Tamil, or any Indian language)")
+            wa_update_session(from_number, step="menu", context=context)
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        if msg_lower in ["1", "rooms", "browse"]:
+            reply_en = ("🏠 *Choose a room:*\n\n"
+                        "🛁 Bathroom\n🛏️ Bedroom\n🍳 Kitchen\n"
+                        "🛋️ Living Room\n🍽️ Dining Room\n📚 Study Room\n"
+                        "🙏 Puja Room\n🏗️ Exterior\n\n"
+                        "Just type the room name!")
+            wa_update_session(from_number, step="choosing_room", context=context)
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        if step == "choosing_room":
+            conn   = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("SELECT * FROM rooms WHERE LOWER(name) LIKE %s", (f"%{msg_lower}%",))
+            room = cursor.fetchone()
+            if room:
+                cursor.execute(
+                    "SELECT * FROM products WHERE room_id=%s ORDER BY price ASC LIMIT 5",
+                    (room["id"],)
+                )
+                products = cursor.fetchall()
+                reply_en = f"🏠 *{room['name']} Products:*\n\n"
+                for p in products:
+                    reply_en += f"• {p['name']} — Rs.{int(p['price']):,}/{p['unit']}\n"
+                reply_en += "\nType a product name for details, or 'menu' to go back."
+                context["room_id"] = room["id"]
+                wa_update_session(from_number, step="menu", context=context)
+            else:
+                reply_en = "Sorry, I didn't recognize that room. Try: Bathroom, Bedroom, Kitchen, Living Room, etc."
+            cursor.close(); conn.close()
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        if msg_lower in ["2", "search"]:
+            reply_en = "🔍 What product are you looking for? (e.g. 'tiles', 'wardrobe', 'sink')"
+            wa_update_session(from_number, step="searching", context=context)
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        if step == "searching":
+            conn   = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute(
+                "SELECT * FROM products WHERE LOWER(name) LIKE %s OR LOWER(description) LIKE %s LIMIT 5",
+                (f"%{msg_lower}%", f"%{msg_lower}%")
+            )
+            results = cursor.fetchall()
+            cursor.close(); conn.close()
+            if results:
+                reply_en = f"🔍 *Found {len(results)} results:*\n\n"
+                for p in results:
+                    reply_en += f"• {p['name']} — Rs.{int(p['price']):,}/{p['unit']}\n"
+                reply_en += "\nType 'menu' for main menu."
+            else:
+                reply_en = "No products found. Try a different keyword, or type 'menu'."
+            wa_update_session(from_number, step="menu", context=context)
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        if msg_lower in ["4", "track", "track order"]:
+            reply_en = "📦 Please tell me your Order ID number (e.g. 12)."
+            wa_update_session(from_number, step="tracking", context=context)
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        if step == "tracking":
+            try:
+                order_id = int(msg_lower)
+                conn   = get_db()
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cursor.execute("SELECT * FROM orders WHERE id=%s", (order_id,))
+                order = cursor.fetchone()
+                cursor.close(); conn.close()
+                if order:
+                    reply_en = (f"📦 *Order #{order_id}*\n"
+                                f"Status: {order['status'].upper()}\n"
+                                f"Total: Rs.{int(order['grand_total']):,}")
+                else:
+                    reply_en = "Order not found. Please check the order ID."
+            except:
+                reply_en = "Please send a valid order number (e.g. 12)."
+            wa_update_session(from_number, step="menu", context=context)
+            wa_send(from_number, wa_translate_out(reply_en, user_lang))
+            return jsonify({"status": "ok"})
+
+        # Default — fall back to Gemini AI for free-form chat (already multilingual)
+        prompt = f"""You are HomeBot AI on WhatsApp, an interior design assistant for Indian homes.
+Customer message: {msg_lower}
+Reply in 2-3 short sentences, friendly tone. If relevant, mention they can type 'menu' to see options."""
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        wa_send(from_number, wa_translate_out(response.text, user_lang))
+        wa_update_session(from_number, step="menu", context=context)
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        print(f"whatsapp_webhook error: {e}")
         return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
