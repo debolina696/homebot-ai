@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = "http://127.0.0.1:5000";
+const API = "https://homebot-ai.onrender.com";
 
 export default function Admin() {
   const [tab, setTab]                   = useState("dashboard");

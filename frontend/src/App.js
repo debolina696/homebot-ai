@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = "http://127.0.0.1:5000";
+const API = "https://homebot-ai.onrender.com";
 
 const track = async (action, roomId=null, productId=null, details="") => {
   try { await fetch(`${API}/api/analytics/track`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:1,action,room_id:roomId,product_id:productId,details})}); } catch {}
