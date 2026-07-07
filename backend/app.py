@@ -149,7 +149,7 @@ Room: {room}
 {budget_text}
 Customer message: {english_message}
 Give a helpful friendly recommendation in 2-3 sentences."""
-        response         = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        response         = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
         english_response = response.text
         if detected_lang != "en":
             final_response = translate(english_response, "en", detected_lang)
@@ -848,7 +848,7 @@ def personalized_chat():
 Style: {style_pref}, Budget: Rs.{budget:,}, Past purchases: {past_str}
 Room: {room}, Message: {english_message}
 Give a PERSONALIZED recommendation in 2-3 sentences. Address by name."""
-        response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
         english_response = response.text
         if detected_lang != "en":
             final_response = translate(english_response, "en", detected_lang)
@@ -1672,7 +1672,7 @@ Give ONE practical budget tip in 2 sentences for this renovation. Be specific wi
 
         try:
             response = client.models.generate_content(
-                model="gemini-1.5-flash", contents=prompt
+                model="gemini-flash-latest", contents=prompt
             )
             ai_tip = response.text
         except:
@@ -2058,7 +2058,7 @@ def whatsapp_webhook():
         prompt = f"""You are HomeBot AI on WhatsApp, an interior design assistant for Indian homes.
 Customer message: {msg_lower}
 Reply in 2-3 short sentences, friendly tone. If relevant, mention they can type 'menu' to see options."""
-        response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
         wa_send(from_number, wa_translate_out(response.text, user_lang))
         wa_update_session(from_number, step="menu", context=context)
         return jsonify({"status": "ok"})
