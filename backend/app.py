@@ -135,7 +135,7 @@ def chat():
         room         = data.get("room", "general")
         budget       = data.get("budget", None)
         try:
-            detected_lang = detect(user_message)
+            detected_lang = detect(user_message) if len(user_message.strip()) > 20 else "en"
         except:
             detected_lang = "en"
         lang_name = LANGUAGE_MAP.get(detected_lang, "English")
