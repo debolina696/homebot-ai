@@ -567,6 +567,10 @@ export default function App() {
   const [showEMI, setShowEMI]                 = useState(false);
   const [emiProduct, setEmiProduct]           = useState(null);
   const [showBudgetPlanner, setShowBudgetPlanner] = useState(false);
+  // Day 3 — Room Design Chat (NEW)
+  const [chatMode, setChatMode]           = useState("normal"); // "normal" or "room_design"
+  const [roomDesignSession, setRoomDesignSession] = useState({});
+  const [roomDesignProducts, setRoomDesignProducts] = useState([]);
   // Day 35 — Loyalty Points (NEW)
   const [showLoyalty, setShowLoyalty]         = useState(false);
   const [loyaltyPoints, setLoyaltyPoints]     = useState(0);
@@ -741,7 +745,43 @@ export default function App() {
   const grandTotal = subtotal+gst;
   const finalTotal = Math.max(0, grandTotal-(couponData?.discount||0)-(pointsDiscount||0));
 
-  const sendMessage = async () => { if (!input.trim()) return; const userMsg=input; setInput(""); setMessages(m=>[...m,{role:"user",text:userMsg}]); setLoading(true); track("chat_message",null,null,userMsg); try { const ep=usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`; const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})}); const d=await r.json(); const aiReply=d.reply||"Sorry, could not process that."; setLastAiMessage(aiReply); setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]); setTimeout(()=>setShowChatbotRating(true),3000); } catch { setMessages(m=>[...m,{role:"ai",text:"Connection error."}]); } setLoading(false); };
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    const userMsg = input;
+    setInput("");
+    setMessages(m=>[...m,{role:"user",text:userMsg}]);
+    setLoading(true);
+    track("chat_message",null,null,userMsg);
+    try {
+      if (chatMode === "room_design") {
+        // Room Design Flow
+        const r = await fetch(`${API}/api/chat/room-design`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,session:roomDesignSession})});
+        const d = await r.json();
+        const aiReply = d.reply || "Sorry, could not process that.";
+        setLastAiMessage(aiReply);
+        setRoomDesignSession(d.session || {});
+        if (d.products && d.products.length > 0) {
+          setRoomDesignProducts(d.products);
+        }
+        if (d.session?.step === "done") {
+          setChatMode("normal");
+        }
+        setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,products:d.products,room_dims:d.room_dims}]);
+      } else {
+        // Normal/Personalized Chat
+        const ep = usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`;
+        const r = await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})});
+        const d = await r.json();
+        const aiReply = d.reply || "Sorry, could not process that.";
+        setLastAiMessage(aiReply);
+        setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]);
+        setTimeout(()=>setShowChatbotRating(true),3000);
+      }
+    } catch {
+      setMessages(m=>[...m,{role:"ai",text:"Connection error."}]);
+    }
+    setLoading(false);
+  };
   const downloadPDF = async () => { if (cart.length===0) { alert("Add products first!"); return; } setPdfLoading(true); try { const res=await fetch(`${API}/api/generate-pdf`,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/pdf"},body:JSON.stringify({items:cart.map(i=>({name:String(i.name),price:Number(i.price),qty:Number(i.qty)})),budget:Number(budget),room:selectedRoom?.name||"Home"})}); if (!res.ok) { alert("PDF Error"); setPdfLoading(false); return; } const blob=await res.blob(); const url=window.URL.createObjectURL(new Blob([blob],{type:"application/pdf"})); const a=document.createElement("a"); a.style.display="none"; a.href=url; a.download="HomeBot_Quotation.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>{window.URL.revokeObjectURL(url);document.body.removeChild(a);},100); } catch(err) { alert("PDF failed"); } setPdfLoading(false); };
   const sendWhatsApp = async () => { const phone=prompt("Enter WhatsApp number:\nExample: +919876543210"); if (!phone) return; try { const r=await fetch(`${API}/api/notify-whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(i=>({name:i.name,price:Number(i.price),qty:Number(i.qty)})),total:finalTotal,room:selectedRoom?.name||"Home",phone:`whatsapp:${phone}`})}); const d=await r.json(); alert(d.status==="ok"?"✅ WhatsApp sent!":"Error: "+d.error); } catch(err) { alert("Failed"); } };
   const handleLogin = async () => { setLoginError(""); try { const r=await fetch(`${API}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:loginEmail,password:loginPassword})}); const d=await r.json(); if (d.status==="ok") { setUser(d.user); setScreen("home"); track("login",null,null,d.user.name); } else setLoginError(d.message||"Login failed"); } catch { setLoginError("Connection error."); } };
@@ -1419,30 +1459,76 @@ export default function App() {
 
         {screen==="chat"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div style={{fontSize:16,fontWeight:600}}>💬 AI Chat</div>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
-                {usePersonalizedChat&&<div style={{background:"#FFF3DC",color:"#BA7517",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>✨ Personalized</div>}
+                {chatMode==="room_design"&&<div style={{background:"#E1F5EE",color:"#085041",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>🏠 Room Design</div>}
+                {chatMode==="normal"&&usePersonalizedChat&&<div style={{background:"#FFF3DC",color:"#BA7517",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>✨ Personalized</div>}
                 <button onClick={()=>setShowStyleSetup(true)} style={{background:"#f0f0f0",border:"none",borderRadius:20,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🎨 Style</button>
               </div>
             </div>
-            <div style={{background:"white",borderRadius:12,padding:12,minHeight:350,maxHeight:400,overflowY:"auto",marginBottom:12}}>
+
+            {/* Day 3 — Room Design Button */}
+            {chatMode==="normal"&&(
+              <button onClick={()=>{
+                setChatMode("room_design");
+                setRoomDesignSession({step:"start"});
+                setRoomDesignProducts([]);
+                setMessages(m=>[...m,{role:"ai",text:"🏠 Room Design Mode activated! I'll help you design your perfect room step by step. Type anything to begin!"}]);
+              }} style={{width:"100%",background:"linear-gradient(135deg,#BA7517,#E8960A)",color:"white",border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                🏠 Design My Room (AI Assistant)
+              </button>
+            )}
+
+            {chatMode==="room_design"&&(
+              <button onClick={()=>{
+                setChatMode("normal");
+                setRoomDesignSession({});
+                setRoomDesignProducts([]);
+              }} style={{width:"100%",background:"#f0f0f0",color:"#555",border:"none",borderRadius:10,padding:"8px 16px",cursor:"pointer",fontSize:12,marginBottom:12}}>
+                ← Back to Normal Chat
+              </button>
+            )}
+
+            <div style={{background:"white",borderRadius:12,padding:12,minHeight:320,maxHeight:380,overflowY:"auto",marginBottom:12}}>
               {messages.map((m,i)=>(
-                <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:10}}>
-                  <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:12,fontSize:14,lineHeight:1.5,background:m.role==="user"?"#BA7517":"#f0f0f0",color:m.role==="user"?"white":"#333"}}>
-                    {m.text}
-                    {m.lang&&<div style={{fontSize:10,marginTop:4,opacity:0.7}}>Detected: {m.lang}</div>}
-                    {m.personalized&&<div style={{fontSize:10,marginTop:2,color:"#BA7517"}}>✨ Personalized</div>}
+                <div key={i} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                    <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:12,fontSize:14,lineHeight:1.5,background:m.role==="user"?"#BA7517":"#f0f0f0",color:m.role==="user"?"white":"#333"}}>
+                      {m.text}
+                      {m.lang&&<div style={{fontSize:10,marginTop:4,opacity:0.7}}>Detected: {m.lang}</div>}
+                      {m.personalized&&<div style={{fontSize:10,marginTop:2,color:"#BA7517"}}>✨ Personalized</div>}
+                    </div>
                   </div>
+                  {/* Show product cards after room design recommendations */}
+                  {m.products&&m.products.length>0&&(
+                    <div style={{marginTop:8}}>
+                      <div style={{fontSize:12,color:"#BA7517",fontWeight:600,marginBottom:6}}>🛍️ Recommended Products:</div>
+                      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
+                        {m.products.map((p,pi)=>(
+                          <div key={pi} style={{flexShrink:0,width:130,background:"#f8f9fa",borderRadius:10,padding:10,border:"1px solid #eee"}}>
+                            {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:70,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/130x70/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:70,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🏠</div>}
+                            <div style={{fontSize:11,fontWeight:600,marginTop:4,lineHeight:1.3}}>{p.name}</div>
+                            <div style={{fontSize:10,color:"#888"}}>{p.brand}</div>
+                            <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                            <button onClick={()=>addToCart(p)} style={{width:"100%",marginTop:4,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"3px 0",cursor:"pointer",fontSize:10,fontWeight:600}}>+ Cart</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {loading&&<div style={{display:"flex",justifyContent:"flex-start",marginBottom:10}}><div style={{background:"#f0f0f0",padding:"10px 14px",borderRadius:12,fontSize:14}}>⏳ Thinking...</div></div>}
             </div>
+
             <div style={{display:"flex",gap:8}}>
-              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="Type in Hindi, Tamil, English..." style={{flex:1,padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,outline:"none"}}/>
+              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder={chatMode==="room_design"?"Enter measurement or answer...":"Type in Hindi, Tamil, English..."} style={{flex:1,padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,outline:"none"}}/>
               <button onClick={sendMessage} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:16}}>➤</button>
             </div>
-            <div style={{fontSize:11,color:"#888",marginTop:8,textAlign:"center"}}>Try: "मुझे बाथरूम के लिए टाइल चाहिए"</div>
+            <div style={{fontSize:11,color:"#888",marginTop:8,textAlign:"center"}}>
+              {chatMode==="room_design"?"🏠 Room Design Mode — Answer each question one by one":"Try: "मुझे बाथरूम के लिए टाइल चाहिए""}
+            </div>
           </div>
         )}
 
