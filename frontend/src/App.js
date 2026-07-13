@@ -1470,11 +1470,21 @@ export default function App() {
 
             {/* Day 3 — Room Design Button */}
             {chatMode==="normal"&&(
-              <button onClick={()=>{
+              <button onClick={async ()=>{
                 setChatMode("room_design");
                 setRoomDesignSession({step:"start"});
                 setRoomDesignProducts([]);
-                setMessages(m=>[...m,{role:"ai",text:"🏠 Room Design Mode activated! I'll help you design your perfect room step by step. Type anything to begin!"}]);
+                setLoading(true);
+                try {
+                  const r = await fetch(`${API}/api/chat/room-design`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"start",user_id:user?.id||1,session:{step:"start"}})});
+                  const d = await r.json();
+                  setRoomDesignSession(d.session||{step:"get_length"});
+                  setMessages(m=>[...m,{role:"ai",text:d.reply||"Hi! What is the LENGTH of your room in feet?"}]);
+                } catch {
+                  setMessages(m=>[...m,{role:"ai",text:"🏠 Room Design Mode! What is the LENGTH of your room in feet?"}]);
+                  setRoomDesignSession({step:"get_length"});
+                }
+                setLoading(false);
               }} style={{width:"100%",background:"linear-gradient(135deg,#BA7517,#E8960A)",color:"white",border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                 🏠 Design My Room (AI Assistant)
               </button>
