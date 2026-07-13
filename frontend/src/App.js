@@ -1527,7 +1527,7 @@ export default function App() {
               <button onClick={sendMessage} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:16}}>➤</button>
             </div>
             <div style={{fontSize:11,color:"#888",marginTop:8,textAlign:"center"}}>
-              {chatMode==="room_design"?"🏠 Room Design Mode — Answer each question one by one":"Try: "मुझे बाथरूम के लिए टाइल चाहिए""}
+              {chatMode==="room_design"?"🏠 Room Design Mode — Answer each question one by one":"Try: मुझे बाथरूम के लिए टाइल चाहिए"}
             </div>
           </div>
         )}
