@@ -2081,6 +2081,7 @@ Reply in 2-3 short sentences, friendly tone. If relevant, mention they can type 
 @app.route("/api/chat/room-design", methods=["POST"])
 def room_design_chat():
     try:
+        import re
         data         = request.get_json()
         user_message = data.get("message", "").strip()
         user_id      = data.get("user_id", 1)
@@ -2104,13 +2105,19 @@ def room_design_chat():
         else:
             english_message = user_message
 
-        # Get user info
+        # Get user info + style profile
         conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT name, city FROM users WHERE id=%s", (user_id,))
         user_info = cursor.fetchone()
+        cursor.execute("SELECT * FROM user_style_profile WHERE user_id=%s", (user_id,))
+        style_profile = cursor.fetchone()
         cursor.close(); conn.close()
-        user_name = user_info["name"] if user_info else "Customer"
+        user_name  = user_info["name"] if user_info else "Customer"
+        user_city  = user_info["city"] if user_info else "India"
+        style_pref = style_profile["favorite_style"] if style_profile else "modern"
+        color_pref = style_profile["color_pref"] if style_profile else ""
+        budget_pref = style_profile["budget_range"] if style_profile else "medium"
 
         # Helper to translate reply back
         def translate_reply(text):
@@ -2121,148 +2128,224 @@ def room_design_chat():
                     return text
             return text
 
+        # ── SMART NLP: Try to extract ALL info from one message using Gemini ──
+        def extract_dims_with_ai(message):
+            try:
+                extract_prompt = f"""Extract room dimensions and budget from this message. Return ONLY a JSON object.
+Message: "{message}"
+Return format: {{"length": number_or_null, "width": number_or_null, "height": number_or_null, "budget": number_or_null}}
+Rules:
+- Extract numbers only, convert feet/foot to numbers
+- If "X by Y" or "X x Y", length=X, width=Y
+- If budget mentioned like "1 lakh" = 100000, "50k" = 50000
+- Return null for anything not mentioned
+Example: "my room is 12 by 10 feet height 9 budget 50000" -> {{"length":12,"width":10,"height":9,"budget":50000}}"""
+                resp = client.models.generate_content(model="gemini-flash-latest", contents=extract_prompt)
+                import json
+                text = resp.text.strip()
+                # Clean up response
+                text = re.sub(r'```json|```', '', text).strip()
+                data = json.loads(text)
+                return data
+            except:
+                return {"length": None, "width": None, "height": None, "budget": None}
+
         # ── STEP: START ──
-        if step == "start" or any(word in english_message.lower() for word in ["design", "room", "renovate", "help", "hi", "hello", "start"]):
-            reply = f"Hi {user_name}! 🏠 I'll help you design your perfect room!\n\nFirst, please tell me — what is the LENGTH of your room in feet?"
+        if step == "start" or any(word in english_message.lower() for word in ["design", "room", "renovate", "help", "hi", "hello", "start", "ok", "okay", "yes"]):
+            # Try smart extraction first - maybe user gave all info at once
+            dims = extract_dims_with_ai(english_message)
+            if dims.get("length") and dims.get("width") and dims.get("height") and dims.get("budget"):
+                # Got everything! Skip straight to recommendations
+                session = {"step": "get_budget", "length": dims["length"], "width": dims["width"], "height": dims["height"], "area": round(dims["length"]*dims["width"], 1)}
+                # Fall through to budget step
+                step = "get_budget"
+                english_message = str(int(dims["budget"]))
+            elif dims.get("length") and dims.get("width") and dims.get("height"):
+                # Got dimensions, just need budget
+                area = round(dims["length"] * dims["width"], 1)
+                reply = f"Great! I got your room size: {dims['length']}ft × {dims['width']}ft × {dims['height']}ft ({area} sq.ft) ✅
+
+What is your BUDGET in rupees? (e.g. 50000)"
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_budget", "length": dims["length"], "width": dims["width"], "height": dims["height"], "area": area},
+                    "detected_lang": detected_lang,
+                    "status": "ok"
+                })
+            elif dims.get("length") and dims.get("width"):
+                # Got L and W, need height
+                reply = f"Got it! Length = {dims['length']}ft, Width = {dims['width']}ft ✅
+
+What is the HEIGHT of your room in feet?"
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_height", "length": dims["length"], "width": dims["width"]},
+                    "detected_lang": detected_lang,
+                    "status": "ok"
+                })
+            else:
+                # Ask step by step
+                reply = f"Hi {user_name}! 🏠 I'll help you design your perfect {style_pref} style room in {user_city}!
+
+You can tell me everything at once like:
+"My room is 12 by 10 feet, height 9, budget 50000"
+
+Or tell me step by step. First — what is the LENGTH of your room in feet?"
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_length"},
+                    "detected_lang": detected_lang,
+                    "status": "ok"
+                })
+
+        # ── STEP: GET LENGTH ──
+        if step == "get_length":
+            dims = extract_dims_with_ai(english_message)
+            if dims.get("length") and dims.get("width") and dims.get("height"):
+                area = round(dims["length"] * dims["width"], 1)
+                reply = f"Got everything! {dims['length']}ft × {dims['width']}ft × {dims['height']}ft ({area} sq.ft) ✅
+
+What is your BUDGET in rupees?"
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_budget", "length": dims["length"], "width": dims["width"], "height": dims["height"], "area": area},
+                    "status": "ok"
+                })
+            numbers = re.findall(r'\d+\.?\d*', english_message)
+            if not numbers:
+                reply = "Please enter the length in feet. For example: 12 or just say "12 by 10 feet""
+                return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
+            # Check if two numbers given (L x W)
+            if len(numbers) >= 2:
+                length, width = float(numbers[0]), float(numbers[1])
+                reply = f"Got it! Length = {length}ft, Width = {width}ft ✅
+
+What is the HEIGHT of your room in feet?"
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_height", "length": length, "width": width},
+                    "status": "ok"
+                })
+            length = float(numbers[0])
+            reply = f"Got it! Length = {length} feet ✅
+
+Now, what is the WIDTH of your room in feet?"
             return jsonify({
                 "reply": translate_reply(reply),
-                "session": {"step": "get_length"},
+                "session": {"step": "get_width", "length": length},
                 "detected_lang": detected_lang,
                 "status": "ok"
             })
 
-        # ── STEP: GET LENGTH ──
-        if step == "get_length":
-            try:
-                # Extract number from message
-                import re
-                numbers = re.findall(r'\d+\.?\d*', english_message)
-                if not numbers:
-                    reply = "Please enter a valid length in feet. For example: 12 or 12.5"
-                    return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-                length = float(numbers[0])
-                reply = f"Got it! Length = {length} feet ✅\n\nNow, what is the WIDTH of your room in feet?"
-                return jsonify({
-                    "reply": translate_reply(reply),
-                    "session": {"step": "get_width", "length": length},
-                    "detected_lang": detected_lang,
-                    "status": "ok"
-                })
-            except:
-                reply = "Please enter the length as a number (e.g. 12)"
-                return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-
         # ── STEP: GET WIDTH ──
         if step == "get_width":
-            try:
-                import re
-                numbers = re.findall(r'\d+\.?\d*', english_message)
-                if not numbers:
-                    reply = "Please enter a valid width in feet. For example: 10"
-                    return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-                width = float(numbers[0])
-                length = session.get("length", 10)
-                reply = f"Got it! Width = {width} feet ✅\n\nNow, what is the HEIGHT of your room in feet?"
-                return jsonify({
-                    "reply": translate_reply(reply),
-                    "session": {"step": "get_height", "length": length, "width": width},
-                    "detected_lang": detected_lang,
-                    "status": "ok"
-                })
-            except:
-                reply = "Please enter the width as a number (e.g. 10)"
+            numbers = re.findall(r'\d+\.?\d*', english_message)
+            if not numbers:
+                reply = "Please enter the width in feet. For example: 10"
                 return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
+            width = float(numbers[0])
+            length = session.get("length", 10)
+            reply = f"Got it! Width = {width} feet ✅
+
+Now, what is the HEIGHT of your room in feet?"
+            return jsonify({
+                "reply": translate_reply(reply),
+                "session": {"step": "get_height", "length": length, "width": width},
+                "detected_lang": detected_lang,
+                "status": "ok"
+            })
 
         # ── STEP: GET HEIGHT ──
         if step == "get_height":
-            try:
-                import re
-                numbers = re.findall(r'\d+\.?\d*', english_message)
-                if not numbers:
-                    reply = "Please enter a valid height in feet. For example: 9"
-                    return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-                height = float(numbers[0])
-                length = session.get("length", 10)
-                width  = session.get("width", 10)
-                area   = round(length * width, 1)
-                reply  = f"Perfect! Height = {height} feet ✅\n\nYour room size: {length}ft × {width}ft × {height}ft ({area} sq.ft)\n\nWhat is your BUDGET in rupees? (e.g. 50000)"
-                return jsonify({
-                    "reply": translate_reply(reply),
-                    "session": {"step": "get_budget", "length": length, "width": width, "height": height, "area": area},
-                    "detected_lang": detected_lang,
-                    "status": "ok"
-                })
-            except:
-                reply = "Please enter the height as a number (e.g. 9)"
+            numbers = re.findall(r'\d+\.?\d*', english_message)
+            if not numbers:
+                reply = "Please enter the height in feet. For example: 9"
                 return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
+            height = float(numbers[0])
+            length = session.get("length", 10)
+            width  = session.get("width", 10)
+            area   = round(length * width, 1)
+            reply  = f"Perfect! Height = {height} feet ✅
+
+Your room: {length}ft × {width}ft × {height}ft ({area} sq.ft)
+
+What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"
+            return jsonify({
+                "reply": translate_reply(reply),
+                "session": {"step": "get_budget", "length": length, "width": width, "height": height, "area": area},
+                "detected_lang": detected_lang,
+                "status": "ok"
+            })
 
         # ── STEP: GET BUDGET ──
         if step == "get_budget":
-            try:
-                import re
-                numbers = re.findall(r'\d+', english_message.replace(",", "").replace(".", ""))
-                if not numbers:
-                    reply = "Please enter your budget as a number (e.g. 50000)"
-                    return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-                budget = int(numbers[0])
-                # Handle shorthand like "1 lakh" or "50k"
-                if "lakh" in english_message.lower() or "lac" in english_message.lower():
-                    budget = budget * 100000
-                elif "k" in english_message.lower() and budget < 1000:
-                    budget = budget * 1000
+            numbers = re.findall(r'\d+', english_message.replace(",", ""))
+            if not numbers:
+                reply = "Please enter your budget as a number (e.g. 50000 or 1 lakh)"
+                return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
+            budget = int(numbers[0])
+            if "lakh" in english_message.lower() or "lac" in english_message.lower():
+                budget = budget * 100000
+            elif budget < 1000 and "k" in english_message.lower():
+                budget = budget * 1000
 
-                length = session.get("length", 10)
-                width  = session.get("width", 10)
-                height = session.get("height", 9)
-                area   = session.get("area", 100)
+            length = session.get("length", 10)
+            width  = session.get("width", 10)
+            height = session.get("height", 9)
+            area   = session.get("area", 100)
 
-                # Get products from DB within budget
-                conn   = get_db()
-                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                cursor.execute("""
-                    SELECT p.name, p.price, p.unit, p.brand, p.material, p.color, p.image_url, r.name as room_name
-                    FROM products p
-                    JOIN rooms r ON p.room_id = r.id
-                    WHERE p.price <= %s
-                    ORDER BY p.price DESC
-                    LIMIT 6
-                """, (budget / 3,))
-                products = cursor.fetchall()
-                cursor.close(); conn.close()
+            # Get products matching style + budget
+            conn   = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("""
+                SELECT p.name, p.price, p.unit, p.brand, p.material, p.color, p.image_url,
+                       p.style_tag, r.name as room_name
+                FROM products p
+                JOIN rooms r ON p.room_id = r.id
+                WHERE p.price <= %s
+                ORDER BY
+                    CASE WHEN LOWER(p.style_tag) = LOWER(%s) THEN 0 ELSE 1 END,
+                    p.price DESC
+                LIMIT 6
+            """, (budget / 3, style_pref))
+            products = cursor.fetchall()
+            cursor.close(); conn.close()
 
-                # Build AI prompt
-                product_list = "\n".join([f"- {p['name']} by {p['brand']}: Rs.{int(p['price'])}/{p['unit']}" for p in products])
-                prompt = f"""You are HomeBot AI helping {user_name} design a room.
+            product_list = "
+".join([f"- {p['name']} by {p['brand']} (Rs.{int(p['price'])}/{p['unit']}, {p.get('style_tag','')} style)" for p in products])
+
+            prompt = f"""You are HomeBot AI helping {user_name} from {user_city} design their room.
+Style preference: {style_pref}{f", Color preference: {color_pref}" if color_pref else ""}
 Room dimensions: {length}ft × {width}ft × {height}ft ({area} sq.ft)
 Budget: Rs.{budget:,}
-Available products:
+Available products (prioritized by style match):
 {product_list}
 
-Give a friendly recommendation in 3-4 sentences:
-1. Summarize the room size
-2. Recommend 2-3 specific products from the list that fit the space and budget
-3. Estimate total cost
-4. End with encouragement"""
+Give a warm, personalized recommendation in 3-4 sentences:
+1. Acknowledge the room size and style preference
+2. Recommend 2-3 specific products that match their {style_pref} style
+3. Give estimated total cost
+4. End with excitement about their room transformation"""
 
-                response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
-                ai_reply = response.text
+            response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
+            ai_reply = response.text
 
-                # Format product list for frontend
-                product_cards = [{"name": p["name"], "price": int(p["price"]), "brand": p["brand"], "unit": p["unit"], "image_url": p.get("image_url", ""), "room_name": p["room_name"]} for p in products]
+            product_cards = [{"name": p["name"], "price": int(p["price"]), "brand": p["brand"], "unit": p["unit"], "image_url": p.get("image_url", ""), "room_name": p["room_name"], "style_tag": p.get("style_tag", "")} for p in products]
 
-                return jsonify({
-                    "reply": translate_reply(ai_reply),
-                    "session": {"step": "done", "length": length, "width": width, "height": height, "budget": budget},
-                    "products": product_cards,
-                    "room_dims": {"length": length, "width": width, "height": height, "area": area},
-                    "detected_lang": detected_lang,
-                    "status": "ok"
-                })
-            except Exception as e:
-                return jsonify({"error": str(e), "reply": "Sorry, could not process budget. Please try again.", "session": session}), 500
+            return jsonify({
+                "reply": translate_reply(ai_reply),
+                "session": {"step": "done", "length": length, "width": width, "height": height, "budget": budget},
+                "products": product_cards,
+                "room_dims": {"length": length, "width": width, "height": height, "area": area},
+                "detected_lang": detected_lang,
+                "status": "ok"
+            })
 
         # Default fallback
-        reply = f"Hi {user_name}! Type 'design my room' to start the room design assistant! 🏠"
+        reply = f"Hi {user_name}! Click 'Design My Room' to start! 🏠
+
+You can say things like:
+"My room is 12 by 10 feet, height 9, budget 50000""
         return jsonify({
             "reply": translate_reply(reply),
             "session": {"step": "start"},
