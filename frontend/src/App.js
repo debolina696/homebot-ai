@@ -464,6 +464,357 @@ const LoyaltyModal = ({user, onClose}) => {
   );
 };
 
+
+// ── ROOM VISUALIZER COMPONENT (Day 4) ──
+const RoomVisualizer = ({dims, products, onClose}) => {
+  const [activeView, setActiveView] = React.useState("floor");
+  const canvasRef = React.useRef(null);
+  const frontRef  = React.useRef(null);
+
+  const COLORS = {
+    wall:    "#F5ECD7",
+    floor:   "#D4A96A",
+    ceiling: "#FFF8EE",
+    grid:    "#E8D5B0",
+    door:    "#8B6914",
+    window:  "#A8D8EA",
+    text:    "#4A3728",
+    accent:  "#BA7517",
+  };
+
+  const PRODUCT_COLORS = [
+    "#E8847A","#7AB8D4","#89C987","#D4A76A",
+    "#9B87C9","#E8B87A","#7AC9C9","#C987A8",
+  ];
+
+  const PRODUCT_ICONS = {
+    "sofa":"🛋️","chair":"🪑","table":"🪞","bed":"🛏️",
+    "tile":"⬜","sink":"🚿","toilet":"🚽","cabinet":"🗄️",
+    "lamp":"💡","tv":"📺","shelf":"📚","default":"📦",
+  };
+
+  const getProductIcon = (name) => {
+    const n = name.toLowerCase();
+    for (const [key, icon] of Object.entries(PRODUCT_ICONS)) {
+      if (n.includes(key)) return icon;
+    }
+    return PRODUCT_ICONS.default;
+  };
+
+  const scale = 30; // pixels per foot
+  const W = (dims?.length || 12) * scale;
+  const H = (dims?.width  || 10) * scale;
+  const roomH = (dims?.height || 9) * scale * 0.7;
+
+  // Draw 2D Floor Plan
+  React.useEffect(() => {
+    if (activeView !== "floor") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const pad = 40;
+    canvas.width  = W + pad * 2;
+    canvas.height = H + pad * 2;
+
+    // Background
+    ctx.fillStyle = "#FAFAF8";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grid
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 0.5;
+    for (let x = pad; x <= W + pad; x += scale) {
+      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, H + pad); ctx.stroke();
+    }
+    for (let y = pad; y <= H + pad; y += scale) {
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W + pad, y); ctx.stroke();
+    }
+
+    // Floor
+    ctx.fillStyle = COLORS.floor;
+    ctx.globalAlpha = 0.15;
+    ctx.fillRect(pad, pad, W, H);
+    ctx.globalAlpha = 1;
+
+    // Walls
+    ctx.strokeStyle = COLORS.text;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(pad, pad, W, H);
+
+    // Door (bottom wall, left side)
+    ctx.strokeStyle = COLORS.door;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pad, pad + H - 6, 30, 6);
+    ctx.fillStyle = COLORS.door;
+    ctx.font = "10px sans-serif";
+    ctx.fillText("🚪", pad + 5, pad + H - 8);
+
+    // Window (top wall, center)
+    ctx.fillStyle = COLORS.window;
+    ctx.fillRect(pad + W/2 - 20, pad - 3, 40, 6);
+    ctx.fillStyle = COLORS.text;
+    ctx.fillText("🪟", pad + W/2 - 8, pad - 5);
+
+    // Place products
+    const prods = products || [];
+    const cols = Math.ceil(Math.sqrt(prods.length));
+    prods.slice(0, 8).forEach((p, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const pw = Math.min(60, W / cols - 10);
+      const ph = Math.min(50, H / Math.ceil(prods.length / cols) - 10);
+      const px = pad + 15 + col * (W / cols);
+      const py = pad + 15 + row * (H / Math.ceil(prods.length / cols));
+
+      // Product box
+      ctx.fillStyle = PRODUCT_COLORS[i % PRODUCT_COLORS.length];
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.roundRect(px, py, pw, ph, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = PRODUCT_COLORS[i % PRODUCT_COLORS.length];
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Icon
+      ctx.font = "16px sans-serif";
+      ctx.fillText(getProductIcon(p.name), px + pw/2 - 8, py + ph/2 + 4);
+
+      // Label
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 8px sans-serif";
+      ctx.textAlign = "center";
+      const label = p.name.length > 10 ? p.name.substring(0,10)+"..." : p.name;
+      ctx.fillText(label, px + pw/2, py + ph + 10);
+      ctx.textAlign = "left";
+    });
+
+    // Dimensions
+    ctx.fillStyle = COLORS.accent;
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`${dims?.length || 12} ft`, pad + W/2, pad - 10);
+    ctx.save();
+    ctx.translate(pad - 12, pad + H/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(`${dims?.width || 10} ft`, 0, 0);
+    ctx.restore();
+    ctx.textAlign = "left";
+
+    // Title
+    ctx.fillStyle = COLORS.text;
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText("📐 Floor Plan", pad, pad - 18);
+
+  }, [activeView, dims, products]);
+
+  // Draw Front View
+  React.useEffect(() => {
+    if (activeView !== "front") return;
+    const canvas = frontRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const cW = W + 80;
+    const cH = roomH + 80;
+    canvas.width  = cW;
+    canvas.height = cH;
+    const pad = 40;
+
+    // Sky/ceiling
+    ctx.fillStyle = "#FFF8EE";
+    ctx.fillRect(0, 0, cW, cH);
+
+    // Back wall
+    const wallGrad = ctx.createLinearGradient(pad, pad, pad, pad + roomH);
+    wallGrad.addColorStop(0, "#F5ECD7");
+    wallGrad.addColorStop(1, "#E8D5B0");
+    ctx.fillStyle = wallGrad;
+    ctx.fillRect(pad, pad, W, roomH);
+
+    // Floor
+    const floorGrad = ctx.createLinearGradient(pad, pad + roomH, pad, pad + roomH + 30);
+    floorGrad.addColorStop(0, "#C4955A");
+    floorGrad.addColorStop(1, "#A07840");
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(pad, pad + roomH, W, 30);
+
+    // Wall border
+    ctx.strokeStyle = "#8B6914";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pad, pad, W, roomH);
+
+    // Window on back wall
+    ctx.fillStyle = "#A8D8EA";
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(pad + W/2 - 30, pad + 20, 60, 50);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#6A9BB0";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pad + W/2 - 30, pad + 20, 60, 50);
+    // Window cross
+    ctx.beginPath();
+    ctx.moveTo(pad + W/2, pad + 20);
+    ctx.lineTo(pad + W/2, pad + 70);
+    ctx.moveTo(pad + W/2 - 30, pad + 45);
+    ctx.lineTo(pad + W/2 + 30, pad + 45);
+    ctx.stroke();
+
+    // Place products along the floor
+    const prods = products || [];
+    const prodW = Math.min(W / (prods.length + 1) - 5, 60);
+    const prodMaxH = roomH * 0.6;
+
+    prods.slice(0, 6).forEach((p, i) => {
+      const px = pad + (i + 1) * (W / (prods.length + 1)) - prodW/2;
+      const ph = prodMaxH * (0.4 + Math.random() * 0.3);
+      const py = pad + roomH - ph;
+
+      // Product shadow
+      ctx.fillStyle = "rgba(0,0,0,0.1)";
+      ctx.beginPath();
+      ctx.ellipse(px + prodW/2, pad + roomH + 15, prodW/2, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Product body
+      const grad = ctx.createLinearGradient(px, py, px + prodW, py);
+      grad.addColorStop(0, PRODUCT_COLORS[i % PRODUCT_COLORS.length]);
+      grad.addColorStop(1, PRODUCT_COLORS[(i+1) % PRODUCT_COLORS.length]);
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(px, py, prodW, ph, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Product icon
+      ctx.font = `${Math.min(prodW * 0.5, 24)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(getProductIcon(p.name), px + prodW/2, py + ph/2 + 6);
+
+      // Product name below floor
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 8px sans-serif";
+      const label = p.name.length > 8 ? p.name.substring(0,8)+"..." : p.name;
+      ctx.fillText(label, px + prodW/2, pad + roomH + 28);
+      ctx.textAlign = "left";
+    });
+
+    // Dimension lines
+    ctx.strokeStyle = COLORS.accent;
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1;
+    // Width dimension
+    ctx.beginPath();
+    ctx.moveTo(pad, pad + roomH + 35);
+    ctx.lineTo(pad + W, pad + roomH + 35);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = COLORS.accent;
+    ctx.font = "bold 10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`${dims?.length || 12} ft`, pad + W/2, pad + roomH + 48);
+    // Height dimension
+    ctx.save();
+    ctx.translate(pad - 20, pad + roomH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(`${dims?.height || 9} ft`, 0, 0);
+    ctx.restore();
+    ctx.textAlign = "left";
+
+    // Title
+    ctx.fillStyle = COLORS.text;
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText("🎨 Front View", pad, pad - 10);
+
+  }, [activeView, dims, products]);
+
+  const area = ((dims?.length||12) * (dims?.width||10)).toFixed(0);
+  const totalCost = products?.reduce((s,p)=>s+(p.price||0),0) || 0;
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"92vh",overflowY:"auto",paddingBottom:20}}>
+
+        {/* Header */}
+        <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",padding:"16px 20px",borderRadius:"16px 16px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{color:"white",fontWeight:700,fontSize:16}}>🏠 Room Visualization</div>
+            <div style={{color:"rgba(255,255,255,0.85)",fontSize:12,marginTop:2}}>{dims?.length||12}ft × {dims?.width||10}ft × {dims?.height||9}ft • {area} sq.ft</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* View Toggle */}
+        <div style={{display:"flex",gap:8,padding:"12px 16px",borderBottom:"1px solid #eee"}}>
+          {[{id:"floor",label:"📐 Floor Plan"},{id:"front",label:"🎨 Front View"},{id:"summary",label:"📊 Summary"}].map(v=>(
+            <button key={v.id} onClick={()=>setActiveView(v.id)}
+              style={{flex:1,padding:"8px 4px",background:activeView===v.id?"#BA7517":"#f0f0f0",color:activeView===v.id?"white":"#555",border:"none",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:activeView===v.id?700:400}}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Floor Plan View */}
+        {activeView==="floor"&&(
+          <div style={{padding:16,textAlign:"center"}}>
+            <canvas ref={canvasRef} style={{maxWidth:"100%",borderRadius:8,border:"1px solid #eee"}}/>
+            <div style={{fontSize:11,color:"#888",marginTop:8}}>Top-down view showing product placement</div>
+          </div>
+        )}
+
+        {/* Front View */}
+        {activeView==="front"&&(
+          <div style={{padding:16,textAlign:"center"}}>
+            <canvas ref={frontRef} style={{maxWidth:"100%",borderRadius:8,border:"1px solid #eee"}}/>
+            <div style={{fontSize:11,color:"#888",marginTop:8}}>Front view showing room with products</div>
+          </div>
+        )}
+
+        {/* Summary View */}
+        {activeView==="summary"&&(
+          <div style={{padding:16}}>
+            <div style={{background:"#FFF3DC",borderRadius:12,padding:16,marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:14,color:"#BA7517",marginBottom:10}}>📐 Room Dimensions</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[{label:"Length",value:`${dims?.length||12} ft`},{label:"Width",value:`${dims?.width||10} ft`},{label:"Height",value:`${dims?.height||9} ft`},{label:"Area",value:`${area} sq.ft`}].map((item,i)=>(
+                  <div key={i} style={{background:"white",borderRadius:8,padding:10,textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#888"}}>{item.label}</div>
+                    <div style={{fontWeight:700,fontSize:15,color:"#BA7517",marginTop:2}}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{fontWeight:600,fontSize:14,marginBottom:10}}>🛍️ Recommended Products</div>
+            {products?.map((p,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"0.5px solid #f0f0f0"}}>
+                <div style={{width:36,height:36,borderRadius:8,background:PRODUCT_COLORS[i%PRODUCT_COLORS.length],display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{getProductIcon(p.name)}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:500,fontSize:13}}>{p.name}</div>
+                  <div style={{fontSize:11,color:"#888"}}>{p.brand} • {p.room_name}</div>
+                </div>
+                <div style={{fontWeight:700,color:"#BA7517",fontSize:13}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+              </div>
+            ))}
+
+            <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{color:"white",fontWeight:600,fontSize:14}}>Total Estimated Cost</div>
+              <div style={{color:"white",fontWeight:800,fontSize:18}}>₹{totalCost.toLocaleString("en-IN")}</div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [screen, setScreen]               = useState("login");
   const [user, setUser]                   = useState(null);
@@ -571,6 +922,10 @@ export default function App() {
   const [chatMode, setChatMode]           = useState("normal"); // "normal" or "room_design"
   const [roomDesignSession, setRoomDesignSession] = useState({});
   const [roomDesignProducts, setRoomDesignProducts] = useState([]);
+  // Day 4 — Room Visualizer (NEW)
+  const [showVisualizer, setShowVisualizer]   = useState(false);
+  const [visualizerDims, setVisualizerDims]   = useState(null);
+  const [visualizerProducts, setVisualizerProducts] = useState([]);
   // Day 35 — Loyalty Points (NEW)
   const [showLoyalty, setShowLoyalty]         = useState(false);
   const [loyaltyPoints, setLoyaltyPoints]     = useState(0);
@@ -762,6 +1117,12 @@ export default function App() {
         setRoomDesignSession(d.session || {});
         if (d.products && d.products.length > 0) {
           setRoomDesignProducts(d.products);
+          // Show visualizer when we have products + dims
+          if (d.room_dims) {
+            setVisualizerDims(d.room_dims);
+            setVisualizerProducts(d.products);
+            setTimeout(() => setShowVisualizer(true), 1500);
+          }
         }
         if (d.session?.step === "done") {
           setChatMode("normal");
@@ -1182,6 +1543,7 @@ export default function App() {
       <ShareModal/>
       {showEMI&&<EMICalculator price={emiProduct?.price||50000} onClose={()=>setShowEMI(false)}/>}
       {showBudgetPlanner&&<BudgetPlanner onClose={()=>setShowBudgetPlanner(false)} onAddToCart={addToCart}/>}
+      {showVisualizer&&visualizerDims&&<RoomVisualizer dims={visualizerDims} products={visualizerProducts} onClose={()=>setShowVisualizer(false)}/>}
       {showLoyalty&&<LoyaltyModal user={user} onClose={()=>{setShowLoyalty(false);loadLoyaltyPoints();}}/>}
 
       <div style={{background:"#BA7517",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -1511,6 +1873,13 @@ export default function App() {
                     </div>
                   </div>
                   {/* Show product cards after room design recommendations */}
+                  {m.products&&m.products.length>0&&(
+                    <div style={{marginTop:6}}>
+                      <button onClick={()=>{setVisualizerDims(m.room_dims);setVisualizerProducts(m.products);setShowVisualizer(true);}} style={{width:"100%",background:"linear-gradient(135deg,#0C447C,#1A6AAF)",color:"white",border:"none",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:8}}>
+                        🏠 View Room Visualization (2D + 3D)
+                      </button>
+                    </div>
+                  )}
                   {m.products&&m.products.length>0&&(
                     <div style={{marginTop:8}}>
                       <div style={{fontSize:12,color:"#BA7517",fontWeight:600,marginBottom:6}}>🛍️ Recommended Products:</div>
