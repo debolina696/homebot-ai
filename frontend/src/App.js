@@ -919,7 +919,10 @@ export default function App() {
   const [emiProduct, setEmiProduct]           = useState(null);
   const [showBudgetPlanner, setShowBudgetPlanner] = useState(false);
   // Day 3 — Room Design Chat (NEW)
-  const [chatMode, setChatMode]           = useState("normal"); // "normal" or "room_design"
+  // Unified chat flow states (Day 4 redesign)
+  const [chatFlow, setChatFlow]           = useState("idle"); // idle|style|budget|dims|products|view2d|done
+  const [chatSession, setChatSession]     = useState({});
+  const [chatMode, setChatMode]           = useState("normal");
   const [roomDesignSession, setRoomDesignSession] = useState({});
   const [roomDesignProducts, setRoomDesignProducts] = useState([]);
   // Day 4 — Room Visualizer (NEW)
@@ -1100,46 +1103,140 @@ export default function App() {
   const grandTotal = subtotal+gst;
   const finalTotal = Math.max(0, grandTotal-(couponData?.discount||0)-(pointsDiscount||0));
 
+  // ── UNIFIED CHAT HANDLER (Day 4) ──
   const sendMessage = async () => {
     if (!input.trim()) return;
-    const userMsg = input;
+    const userMsg = input.trim();
     setInput("");
     setMessages(m=>[...m,{role:"user",text:userMsg}]);
     setLoading(true);
     track("chat_message",null,null,userMsg);
+
     try {
-      if (chatMode === "room_design") {
-        // Room Design Flow
-        const r = await fetch(`${API}/api/chat/room-design`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,session:roomDesignSession})});
-        const d = await r.json();
-        const aiReply = d.reply || "Sorry, could not process that.";
-        setLastAiMessage(aiReply);
-        setRoomDesignSession(d.session || {});
-        if (d.products && d.products.length > 0) {
-          setRoomDesignProducts(d.products);
-          // Show visualizer when we have products + dims
-          if (d.room_dims) {
-            setVisualizerDims(d.room_dims);
-            setVisualizerProducts(d.products);
-            setTimeout(() => setShowVisualizer(true), 1500);
-          }
-        }
-        if (d.session?.step === "done") {
-          setChatMode("normal");
-        }
-        setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,products:d.products,room_dims:d.room_dims}]);
-      } else {
-        // Normal/Personalized Chat
-        const ep = usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`;
-        const r = await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})});
-        const d = await r.json();
-        const aiReply = d.reply || "Sorry, could not process that.";
-        setLastAiMessage(aiReply);
-        setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]);
-        setTimeout(()=>setShowChatbotRating(true),3000);
+      // ── FLOW: Collecting style ──
+      if (chatFlow === "style") {
+        const styleMap = {"1":"modern","2":"classic","3":"traditional","4":"luxury","5":"minimalist",
+          "modern":"modern","classic":"classic","traditional":"traditional","luxury":"luxury","minimalist":"minimalist"};
+        const chosen = styleMap[userMsg.toLowerCase().trim()] || "modern";
+        setChatSession(s=>({...s, style:chosen}));
+        setChatFlow("budget");
+        setMessages(m=>[...m,{role:"ai",text:`Great choice! 🎨 ${chosen.charAt(0).toUpperCase()+chosen.slice(1)} style it is!
+
+Now, what is your BUDGET in rupees?
+(e.g. 50000, 1 lakh, 2 lakh)`}]);
+        setLoading(false); return;
       }
-    } catch {
-      setMessages(m=>[...m,{role:"ai",text:"Connection error."}]);
+
+      // ── FLOW: Collecting budget ──
+      if (chatFlow === "budget") {
+        const nums = userMsg.replace(/,/g,"").match(/\d+/g);
+        if (!nums) {
+          setMessages(m=>[...m,{role:"ai",text:"Please enter a valid budget amount (e.g. 50000 or 1 lakh)"}]);
+          setLoading(false); return;
+        }
+        let bgt = parseInt(nums[0]);
+        if (userMsg.toLowerCase().includes("lakh") || userMsg.toLowerCase().includes("lac")) bgt *= 100000;
+        else if (bgt < 1000 && userMsg.toLowerCase().includes("k")) bgt *= 1000;
+        setChatSession(s=>({...s, budget:bgt}));
+        setChatFlow("dims");
+        setMessages(m=>[...m,{role:"ai",text:`Perfect! Budget: ₹${bgt.toLocaleString("en-IN")} ✅
+
+Now tell me your room dimensions.
+You can say it naturally like:
+"My room is 12 by 10 feet, height 9"
+or give one value at a time.
+
+What is the LENGTH of your room in feet?`}]);
+        setLoading(false); return;
+      }
+
+      // ── FLOW: Collecting dimensions ──
+      if (chatFlow === "dims") {
+        const r = await fetch(`${API}/api/chat/room-design`,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({message:userMsg, user_id:user?.id||1, session:{...chatSession, step: chatSession.step||"get_length"}})
+        });
+        const d = await r.json();
+        if (d.session) setChatSession(s=>({...s,...d.session}));
+
+        if (d.session?.step === "done" || (d.products && d.products.length > 0)) {
+          // Got products! Show them + ask about 2D
+          setChatFlow("products");
+          if (d.room_dims) { setVisualizerDims(d.room_dims); setVisualizerProducts(d.products||[]); }
+          setMessages(m=>[...m,
+            {role:"ai", text:d.reply||"Here are my recommendations!", lang:d.detected_lang, products:d.products, room_dims:d.room_dims},
+            {role:"ai", text:"🏠 Want to see a 2D floor plan of your room with these products?
+
+Type YES to see the floor plan or NO to continue chatting.", type:"ask_2d"}
+          ]);
+          setChatSession(s=>({...s, dims:d.room_dims}));
+        } else {
+          setMessages(m=>[...m,{role:"ai",text:d.reply||"Please continue...",lang:d.detected_lang}]);
+        }
+        setLoading(false); return;
+      }
+
+      // ── FLOW: Ask about 2D ──
+      if (chatFlow === "products") {
+        const ans = userMsg.toLowerCase().trim();
+        if (ans.includes("yes") || ans === "y" || ans.includes("हां") || ans.includes("ha")) {
+          setChatFlow("view2d");
+          setShowVisualizer(true);
+          setMessages(m=>[...m,{role:"ai",text:"📐 Opening your 2D floor plan now! Check the visualization above.
+
+After viewing, type YES if you'd also like to see a 3D view, or NO to finish.",type:"ask_3d"}]);
+        } else {
+          setChatFlow("done");
+          setMessages(m=>[...m,{role:"ai",text:"No problem! Feel free to ask me anything else about interior design. 😊"}]);
+        }
+        setLoading(false); return;
+      }
+
+      // ── FLOW: Ask about 3D ──
+      if (chatFlow === "view2d") {
+        const ans = userMsg.toLowerCase().trim();
+        if (ans.includes("yes") || ans === "y") {
+          setChatFlow("done");
+          setMessages(m=>[...m,{role:"ai",text:"🚀 3D visualization is coming soon in the next update! For now, enjoy the 2D floor plan. Thank you for using HomeBot AI! 🏠"}]);
+        } else {
+          setChatFlow("done");
+          setMessages(m=>[...m,{role:"ai",text:"Great! Your room design is saved. Feel free to add products to cart and contact us for installation. 🏠"}]);
+        }
+        setLoading(false); return;
+      }
+
+      // ── DEFAULT: Normal personalized chat + detect if user wants room design ──
+      const roomKeywords = ["design","renovate","my room","floor plan","2d","3d","dimension","room size"];
+      const wantsDesign = roomKeywords.some(k=>userMsg.toLowerCase().includes(k));
+
+      if (wantsDesign && chatFlow === "idle") {
+        setChatFlow("style");
+        setMessages(m=>[...m,{role:"ai",text:`🏠 Let's design your perfect room!
+
+First, what is your preferred style?
+
+1️⃣ Modern
+2️⃣ Classic
+3️⃣ Traditional
+4️⃣ Luxury
+5️⃣ Minimalist
+
+Type a number or the style name!`}]);
+        setLoading(false); return;
+      }
+
+      // Normal personalized chat
+      const ep = usePersonalizedChat?`${API}/api/chat/personalized`:`${API}/api/chat`;
+      const r = await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,user_id:user?.id||1,room:selectedRoom?.name||"general",budget})});
+      const d = await r.json();
+      const aiReply = d.reply || "Sorry, could not process that.";
+      setLastAiMessage(aiReply);
+      setMessages(m=>[...m,{role:"ai",text:aiReply,lang:d.detected_lang,personalized:d.personalized}]);
+      setTimeout(()=>setShowChatbotRating(true),3000);
+
+    } catch(e) {
+      setMessages(m=>[...m,{role:"ai",text:"Connection error. Please try again."}]);
     }
     setLoading(false);
   };
@@ -1821,92 +1918,144 @@ export default function App() {
 
         {screen==="chat"&&(
           <div>
+            {/* Header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div style={{fontSize:16,fontWeight:600}}>💬 AI Chat</div>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
-                {chatMode==="room_design"&&<div style={{background:"#E1F5EE",color:"#085041",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>🏠 Room Design</div>}
-                {chatMode==="normal"&&usePersonalizedChat&&<div style={{background:"#FFF3DC",color:"#BA7517",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>✨ Personalized</div>}
+                {chatFlow!=="idle"&&chatFlow!=="done"&&(
+                  <div style={{background:"#E1F5EE",color:"#085041",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>
+                    {chatFlow==="style"?"🎨 Style":chatFlow==="budget"?"💰 Budget":chatFlow==="dims"?"📐 Dims":chatFlow==="products"?"🛍️ Products":"🏠 Design"}
+                  </div>
+                )}
+                {chatFlow==="idle"&&usePersonalizedChat&&<div style={{background:"#FFF3DC",color:"#BA7517",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>✨ Personalized</div>}
                 <button onClick={()=>setShowStyleSetup(true)} style={{background:"#f0f0f0",border:"none",borderRadius:20,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>🎨 Style</button>
+                {chatFlow!=="idle"&&(
+                  <button onClick={()=>{setChatFlow("idle");setChatSession({});}} style={{background:"#fee",color:"#c00",border:"none",borderRadius:20,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>✕ Reset</button>
+                )}
               </div>
             </div>
 
-            {/* Day 3 — Room Design Button */}
-            {chatMode==="normal"&&(
-              <button onClick={async ()=>{
-                setChatMode("room_design");
-                setRoomDesignSession({step:"start"});
-                setRoomDesignProducts([]);
-                setLoading(true);
-                try {
-                  const r = await fetch(`${API}/api/chat/room-design`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"start",user_id:user?.id||1,session:{step:"start"}})});
-                  const d = await r.json();
-                  setRoomDesignSession(d.session||{step:"get_length"});
-                  setMessages(m=>[...m,{role:"ai",text:d.reply||"Hi! What is the LENGTH of your room in feet?"}]);
-                } catch {
-                  setMessages(m=>[...m,{role:"ai",text:"🏠 Room Design Mode! What is the LENGTH of your room in feet?"}]);
-                  setRoomDesignSession({step:"get_length"});
-                }
-                setLoading(false);
-              }} style={{width:"100%",background:"linear-gradient(135deg,#BA7517,#E8960A)",color:"white",border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                🏠 Design My Room (AI Assistant)
-              </button>
-            )}
-
-            {chatMode==="room_design"&&(
+            {/* Quick Start Button — only when idle */}
+            {chatFlow==="idle"&&(
               <button onClick={()=>{
-                setChatMode("normal");
-                setRoomDesignSession({});
-                setRoomDesignProducts([]);
-              }} style={{width:"100%",background:"#f0f0f0",color:"#555",border:"none",borderRadius:10,padding:"8px 16px",cursor:"pointer",fontSize:12,marginBottom:12}}>
-                ← Back to Normal Chat
+                setChatFlow("style");
+                setMessages(m=>[...m,{role:"ai",text:"🏠 Let's design your perfect room!
+
+First, what is your preferred style?
+
+1️⃣ Modern
+2️⃣ Classic
+3️⃣ Traditional
+4️⃣ Luxury
+5️⃣ Minimalist
+
+Type a number or the style name!"}]);
+              }} style={{width:"100%",background:"linear-gradient(135deg,#BA7517,#E8960A)",color:"white",border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                🏠 Design My Room — AI Assistant
               </button>
             )}
 
-            <div style={{background:"white",borderRadius:12,padding:12,minHeight:320,maxHeight:380,overflowY:"auto",marginBottom:12}}>
+            {/* Progress bar during flow */}
+            {chatFlow!=="idle"&&chatFlow!=="done"&&(
+              <div style={{display:"flex",gap:4,marginBottom:12}}>
+                {["style","budget","dims","products","view2d"].map((f,i)=>(
+                  <div key={f} style={{flex:1,height:4,borderRadius:2,background:["style","budget","dims","products","view2d"].indexOf(chatFlow)>=i?"#BA7517":"#e0e0e0"}}/>
+                ))}
+              </div>
+            )}
+
+            {/* Chat messages */}
+            <div style={{background:"white",borderRadius:12,padding:12,minHeight:320,maxHeight:400,overflowY:"auto",marginBottom:12}}>
               {messages.map((m,i)=>(
                 <div key={i} style={{marginBottom:10}}>
                   <div style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                    <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:12,fontSize:14,lineHeight:1.5,background:m.role==="user"?"#BA7517":"#f0f0f0",color:m.role==="user"?"white":"#333"}}>
+                    <div style={{maxWidth:"82%",padding:"10px 14px",borderRadius:12,fontSize:14,lineHeight:1.6,background:m.role==="user"?"#BA7517":"#f0f0f0",color:m.role==="user"?"white":"#333",whiteSpace:"pre-line"}}>
                       {m.text}
-                      {m.lang&&<div style={{fontSize:10,marginTop:4,opacity:0.7}}>Detected: {m.lang}</div>}
+                      {m.lang&&m.lang!=="en"&&<div style={{fontSize:10,marginTop:4,opacity:0.6}}>Detected: {m.lang}</div>}
                       {m.personalized&&<div style={{fontSize:10,marginTop:2,color:"#BA7517"}}>✨ Personalized</div>}
                     </div>
                   </div>
-                  {/* Show product cards after room design recommendations */}
+
+                  {/* Product Cards */}
                   {m.products&&m.products.length>0&&(
-                    <div style={{marginTop:6}}>
-                      <button onClick={()=>{setVisualizerDims(m.room_dims);setVisualizerProducts(m.products);setShowVisualizer(true);}} style={{width:"100%",background:"linear-gradient(135deg,#0C447C,#1A6AAF)",color:"white",border:"none",borderRadius:8,padding:"8px 12px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:8}}>
-                        🏠 View Room Visualization (2D + 3D)
-                      </button>
-                    </div>
-                  )}
-                  {m.products&&m.products.length>0&&(
-                    <div style={{marginTop:8}}>
-                      <div style={{fontSize:12,color:"#BA7517",fontWeight:600,marginBottom:6}}>🛍️ Recommended Products:</div>
-                      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
+                    <div style={{marginTop:10}}>
+                      <div style={{fontSize:12,color:"#BA7517",fontWeight:700,marginBottom:8}}>🛍️ Recommended Products:</div>
+                      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6}}>
                         {m.products.map((p,pi)=>(
-                          <div key={pi} style={{flexShrink:0,width:130,background:"#f8f9fa",borderRadius:10,padding:10,border:"1px solid #eee"}}>
-                            {p.image_url?<img src={p.image_url} alt={p.name} style={{width:"100%",height:70,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.src="https://placehold.co/130x70/FFF3DC/BA7517?text=🏠";}}/>:<div style={{width:"100%",height:70,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🏠</div>}
-                            <div style={{fontSize:11,fontWeight:600,marginTop:4,lineHeight:1.3}}>{p.name}</div>
-                            <div style={{fontSize:10,color:"#888"}}>{p.brand}</div>
-                            <div style={{color:"#BA7517",fontWeight:700,fontSize:12,marginTop:2}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-                            <button onClick={()=>addToCart(p)} style={{width:"100%",marginTop:4,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"3px 0",cursor:"pointer",fontSize:10,fontWeight:600}}>+ Cart</button>
+                          <div key={pi} style={{flexShrink:0,width:130,background:"#f8f9fa",borderRadius:10,padding:10,border:"1px solid #eee",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                            {p.image_url
+                              ?<img src={p.image_url} alt={p.name} style={{width:"100%",height:70,objectFit:"cover",borderRadius:6}} onError={e=>{e.target.onerror=null;e.target.style.display="none";}}/>
+                              :<div style={{width:"100%",height:70,background:"#FFF3DC",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>
+                            }
+                            <div style={{fontSize:11,fontWeight:600,marginTop:6,lineHeight:1.3,color:"#222"}}>{p.name}</div>
+                            <div style={{fontSize:10,color:"#999",marginTop:2}}>{p.brand}</div>
+                            <div style={{color:"#BA7517",fontWeight:700,fontSize:13,marginTop:4}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
+                            <button onClick={()=>{addToCart(p);}} style={{width:"100%",marginTop:6,background:"#BA7517",color:"white",border:"none",borderRadius:6,padding:"5px 0",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Add to Cart</button>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
+
+                  {/* 2D View Button */}
+                  {m.type==="ask_2d"&&(
+                    <div style={{display:"flex",gap:8,marginTop:8}}>
+                      <button onClick={()=>{setShowVisualizer(true);setChatFlow("view2d");setMessages(mn=>[...mn,{role:"user",text:"Yes"},{role:"ai",text:"📐 Here's your 2D floor plan! After viewing, type YES if you'd like a 3D view too.",type:"ask_3d"}]);}} style={{flex:1,background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                        ✅ Yes, Show 2D Plan
+                      </button>
+                      <button onClick={()=>{setChatFlow("done");setMessages(mn=>[...mn,{role:"user",text:"No"},{role:"ai",text:"No problem! You can add the products to cart and we'll help with installation. 🏠"}]);}} style={{flex:1,background:"#f0f0f0",color:"#555",border:"none",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12}}>
+                        ❌ No Thanks
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 3D View Button */}
+                  {m.type==="ask_3d"&&(
+                    <div style={{display:"flex",gap:8,marginTop:8}}>
+                      <button onClick={()=>{setChatFlow("done");setMessages(mn=>[...mn,{role:"user",text:"Yes"},{role:"ai",text:"🚀 3D visualization is coming in the next update! For now, explore the 2D floor plan. Thank you for using HomeBot AI! 🏠✨"}]);}} style={{flex:1,background:"#0C447C",color:"white",border:"none",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                        ✅ Yes, Show 3D
+                      </button>
+                      <button onClick={()=>{setChatFlow("done");setMessages(mn=>[...mn,{role:"user",text:"No"},{role:"ai",text:"Great! Your design is ready. Add products to cart and our team will help with installation. 🏠"}]);}} style={{flex:1,background:"#f0f0f0",color:"#555",border:"none",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12}}>
+                        ❌ No Thanks
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
-              {loading&&<div style={{display:"flex",justifyContent:"flex-start",marginBottom:10}}><div style={{background:"#f0f0f0",padding:"10px 14px",borderRadius:12,fontSize:14}}>⏳ Thinking...</div></div>}
+              {loading&&(
+                <div style={{display:"flex",justifyContent:"flex-start",marginBottom:10}}>
+                  <div style={{background:"#f0f0f0",padding:"10px 14px",borderRadius:12,fontSize:14,display:"flex",gap:6,alignItems:"center"}}>
+                    <span style={{animation:"pulse 1s infinite"}}>⏳</span> HomeBot AI is thinking...
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* Input */}
             <div style={{display:"flex",gap:8}}>
-              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder={chatMode==="room_design"?"Enter measurement or answer...":"Type in Hindi, Tamil, English..."} style={{flex:1,padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:14,outline:"none"}}/>
+              <input
+                value={input}
+                onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&sendMessage()}
+                placeholder={
+                  chatFlow==="style"?"Type style number or name (e.g. 1 or Modern)...":
+                  chatFlow==="budget"?"Enter budget (e.g. 50000 or 1 lakh)...":
+                  chatFlow==="dims"?"Enter room size (e.g. 12 by 10 feet height 9)...":
+                  chatFlow==="products"?"Type YES to see 2D floor plan...":
+                  chatFlow==="view2d"?"Type YES for 3D view or NO to finish...":
+                  "Chat freely or say 'design my room'..."
+                }
+                style={{flex:1,padding:"10px 14px",borderRadius:8,border:"1px solid #ddd",fontSize:13,outline:"none"}}
+              />
               <button onClick={sendMessage} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:16}}>➤</button>
             </div>
-            <div style={{fontSize:11,color:"#888",marginTop:8,textAlign:"center"}}>
-              {chatMode==="room_design"?"🏠 Room Design Mode — Answer each question one by one":"Try: मुझे बाथरूम के लिए टाइल चाहिए"}
+            <div style={{fontSize:11,color:"#888",marginTop:6,textAlign:"center"}}>
+              {chatFlow==="idle"?"Try: "design my room" or "मुझे बाथरूम डिज़ाइन करना है"":
+               chatFlow==="style"?"Choose your preferred interior style":
+               chatFlow==="budget"?"Enter your renovation budget":
+               chatFlow==="dims"?"Share your room measurements":
+               chatFlow==="products"?"Products ready! View 2D floor plan?":
+               "🏠 Room design in progress..."}
             </div>
           </div>
         )}
