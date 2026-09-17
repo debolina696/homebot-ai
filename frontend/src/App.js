@@ -1,4 +1,6 @@
+/* eslint-disable */
 import { useState, useEffect } from "react";
+
 
 const API = "https://homebot-ai.onrender.com";
 
@@ -1120,10 +1122,7 @@ export default function App() {
         const chosen = styleMap[userMsg.toLowerCase().trim()] || "modern";
         setChatSession(s=>({...s, style:chosen}));
         setChatFlow("budget");
-        setMessages(m=>[...m,{role:"ai",text:`Great choice! 🎨 ${chosen.charAt(0).toUpperCase()+chosen.slice(1)} style it is!
-
-Now, what is your BUDGET in rupees?
-(e.g. 50000, 1 lakh, 2 lakh)`}]);
+        setMessages(m=>[...m,{role:"ai",text:`Great choice! 🎨 ${chosen.charAt(0).toUpperCase()+chosen.slice(1)} style it is!\n\nNow, what is your BUDGET in rupees?\n(e.g. 50000, 1 lakh, 2 lakh)`}]);
         setLoading(false); return;
       }
 
@@ -1139,14 +1138,7 @@ Now, what is your BUDGET in rupees?
         else if (bgt < 1000 && userMsg.toLowerCase().includes("k")) bgt *= 1000;
         setChatSession(s=>({...s, budget:bgt}));
         setChatFlow("dims");
-        setMessages(m=>[...m,{role:"ai",text:`Perfect! Budget: ₹${bgt.toLocaleString("en-IN")} ✅
-
-Now tell me your room dimensions.
-You can say it naturally like:
-"My room is 12 by 10 feet, height 9"
-or give one value at a time.
-
-What is the LENGTH of your room in feet?`}]);
+        setMessages(m=>[...m,{role:"ai",text:`Perfect! Budget: ₹${bgt.toLocaleString("en-IN")} ✅\n\nNow tell me your room dimensions.\nYou can say it naturally like:\n"My room is 12 by 10 feet, height 9"\nor give one value at a time.\n\nWhat is the LENGTH of your room in feet?`}]);
         setLoading(false); return;
       }
 
@@ -1166,9 +1158,7 @@ What is the LENGTH of your room in feet?`}]);
           if (d.room_dims) { setVisualizerDims(d.room_dims); setVisualizerProducts(d.products||[]); }
           setMessages(m=>[...m,
             {role:"ai", text:d.reply||"Here are my recommendations!", lang:d.detected_lang, products:d.products, room_dims:d.room_dims},
-            {role:"ai", text:"🏠 Want to see a 2D floor plan of your room with these products?
-
-Type YES to see the floor plan or NO to continue chatting.", type:"ask_2d"}
+            {role:"ai", text:"🏠 Want to see a 2D floor plan of your room with these products?\n\nType YES to see the floor plan or NO to continue chatting.", type:"ask_2d"}
           ]);
           setChatSession(s=>({...s, dims:d.room_dims}));
         } else {
@@ -1183,9 +1173,7 @@ Type YES to see the floor plan or NO to continue chatting.", type:"ask_2d"}
         if (ans.includes("yes") || ans === "y" || ans.includes("हां") || ans.includes("ha")) {
           setChatFlow("view2d");
           setShowVisualizer(true);
-          setMessages(m=>[...m,{role:"ai",text:"📐 Opening your 2D floor plan now! Check the visualization above.
-
-After viewing, type YES if you'd also like to see a 3D view, or NO to finish.",type:"ask_3d"}]);
+          setMessages(m=>[...m,{role:"ai",text:"📐 Opening your 2D floor plan now! Check the visualization above.\n\nAfter viewing, type YES if you'd also like to see a 3D view, or NO to finish.",type:"ask_3d"}]);
         } else {
           setChatFlow("done");
           setMessages(m=>[...m,{role:"ai",text:"No problem! Feel free to ask me anything else about interior design. 😊"}]);
@@ -1212,17 +1200,7 @@ After viewing, type YES if you'd also like to see a 3D view, or NO to finish.",t
 
       if (wantsDesign && chatFlow === "idle") {
         setChatFlow("style");
-        setMessages(m=>[...m,{role:"ai",text:`🏠 Let's design your perfect room!
-
-First, what is your preferred style?
-
-1️⃣ Modern
-2️⃣ Classic
-3️⃣ Traditional
-4️⃣ Luxury
-5️⃣ Minimalist
-
-Type a number or the style name!`}]);
+        setMessages(m=>[...m,{role:"ai",text:`🏠 Let's design your perfect room!\n\nFirst, what is your preferred style?\n\n1️⃣ Modern\n2️⃣ Classic\n3️⃣ Traditional\n4️⃣ Luxury\n5️⃣ Minimalist\n\nType a number or the style name!`}]);
         setLoading(false); return;
       }
 
@@ -1939,17 +1917,7 @@ Type a number or the style name!`}]);
             {chatFlow==="idle"&&(
               <button onClick={()=>{
                 setChatFlow("style");
-                setMessages(m=>[...m,{role:"ai",text:"🏠 Let's design your perfect room!
-
-First, what is your preferred style?
-
-1️⃣ Modern
-2️⃣ Classic
-3️⃣ Traditional
-4️⃣ Luxury
-5️⃣ Minimalist
-
-Type a number or the style name!"}]);
+                setMessages(m=>[...m,{role:"ai",text:"🏠 Let's design your perfect room!\n\nFirst, what is your preferred style?\n\n1️⃣ Modern\n2️⃣ Classic\n3️⃣ Traditional\n4️⃣ Luxury\n5️⃣ Minimalist\n\nType a number or the style name!"}]);
               }} style={{width:"100%",background:"linear-gradient(135deg,#BA7517,#E8960A)",color:"white",border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                 🏠 Design My Room — AI Assistant
               </button>
@@ -2050,7 +2018,7 @@ Type a number or the style name!"}]);
               <button onClick={sendMessage} style={{background:"#BA7517",color:"white",border:"none",borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:16}}>➤</button>
             </div>
             <div style={{fontSize:11,color:"#888",marginTop:6,textAlign:"center"}}>
-              {chatFlow==="idle"?"Try: "design my room" or "मुझे बाथरूम डिज़ाइन करना है"":
+              {chatFlow==="idle"?`Try: "design my room" or "मुझे बाथरूम डिज़ाइन करना है"`:
                chatFlow==="style"?"Choose your preferred interior style":
                chatFlow==="budget"?"Enter your renovation budget":
                chatFlow==="dims"?"Share your room measurements":
