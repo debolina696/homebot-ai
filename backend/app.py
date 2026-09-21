@@ -2233,13 +2233,11 @@ What is the HEIGHT of your room in feet?"""
                     "status": "ok"
                 })
             else:
-                # Ask step by step
+                # Ask for all three dimensions together
                 reply = f"""Hi {user_name}! 🏠 I'll help you design your perfect {style_pref} style room in {user_city}!
 
-You can tell me everything at once like:
-"My room is 12 by 10 feet, height 9, budget 50000"
-
-Or tell me step by step. First — what is the LENGTH of your room in feet?"""
+What are your room's dimensions in feet? Please give Length, Width and Height together, like:
+"12 by 10 feet, height 9" """
                 return jsonify({
                     "reply": translate_reply(reply),
                     "session": {"step": "get_length", "budget": known_budget},
@@ -2268,10 +2266,25 @@ What is your BUDGET in rupees?"""
                 })
             numbers = re.findall(r'\d+\.?\d*', english_message)
             if not numbers:
-                reply = """Please enter the length in feet. For example: 12 or just say "12 by 10 feet\""""
+                reply = """Please give your room's Length, Width and Height in feet, e.g. "12 by 10 feet, height 9\""""
                 return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-            # Check if two numbers given (L x W)
-            if len(numbers) >= 2:
+            # All three given at once (L, W, H)
+            if len(numbers) >= 3:
+                length, width, height = float(numbers[0]), float(numbers[1]), float(numbers[2])
+                area = round(length * width, 1)
+                if known_budget:
+                    return generate_recommendations(length, width, height, area, known_budget)
+                reply = f"""Got it! {length}ft × {width}ft × {height}ft ({area} sq.ft) ✅
+
+What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"""
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_budget", "length": length, "width": width, "height": height, "area": area, "budget": known_budget},
+                    "detected_lang": detected_lang,
+                    "status": "ok"
+                })
+            # Only two numbers given (L x W) — still need height
+            if len(numbers) == 2:
                 length, width = float(numbers[0]), float(numbers[1])
                 reply = f"""Got it! Length = {length}ft, Width = {width}ft ✅
 
@@ -2284,7 +2297,7 @@ What is the HEIGHT of your room in feet?"""
             length = float(numbers[0])
             reply = f"""Got it! Length = {length} feet ✅
 
-Now, what is the WIDTH of your room in feet?"""
+Now, please give me the WIDTH and HEIGHT of your room in feet (e.g. "10 by 9")."""
             return jsonify({
                 "reply": translate_reply(reply),
                 "session": {"step": "get_width", "length": length, "budget": known_budget},
@@ -2296,16 +2309,32 @@ Now, what is the WIDTH of your room in feet?"""
         if step == "get_width":
             numbers = re.findall(r'\d+\.?\d*', english_message)
             if not numbers:
-                reply = "Please enter the width in feet. For example: 10"
+                reply = """Please give me the WIDTH and HEIGHT in feet, e.g. "10 by 9\""""
                 return jsonify({"reply": translate_reply(reply), "session": session, "status": "ok"})
-            width = float(numbers[0])
             length = session.get("length", 10)
+            known_budget = session.get("budget")
+            # Width and height given together
+            if len(numbers) >= 2:
+                width, height = float(numbers[0]), float(numbers[1])
+                area = round(length * width, 1)
+                if known_budget:
+                    return generate_recommendations(length, width, height, area, known_budget)
+                reply = f"""Got it! {length}ft × {width}ft × {height}ft ({area} sq.ft) ✅
+
+What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"""
+                return jsonify({
+                    "reply": translate_reply(reply),
+                    "session": {"step": "get_budget", "length": length, "width": width, "height": height, "area": area, "budget": known_budget},
+                    "detected_lang": detected_lang,
+                    "status": "ok"
+                })
+            width = float(numbers[0])
             reply = f"""Got it! Width = {width} feet ✅
 
 Now, what is the HEIGHT of your room in feet?"""
             return jsonify({
                 "reply": translate_reply(reply),
-                "session": {"step": "get_height", "length": length, "width": width, "budget": session.get("budget")},
+                "session": {"step": "get_height", "length": length, "width": width, "budget": known_budget},
                 "detected_lang": detected_lang,
                 "status": "ok"
             })
