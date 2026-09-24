@@ -2128,6 +2128,13 @@ def room_design_chat():
                     return text
             return text
 
+        # Format a number without a trailing .0 for cleaner chat replies (12.0 -> "12")
+        def fnum(x):
+            try:
+                return str(int(x)) if float(x) == int(x) else str(x)
+            except (TypeError, ValueError):
+                return str(x)
+
         # ── Helper: generate product recommendations for a known budget ──
         def generate_recommendations(length, width, height, area, budget):
             conn   = get_db()
@@ -2150,7 +2157,7 @@ def room_design_chat():
 
             prompt = f"""You are HomeBot AI helping {user_name} from {user_city} design their room.
 Style preference: {style_pref}{f", Color preference: {color_pref}" if color_pref else ""}
-Room dimensions: {length}ft × {width}ft × {height}ft ({area} sq.ft)
+Room dimensions: {fnum(length)}ft × {fnum(width)}ft × {fnum(height)}ft ({area} sq.ft)
 Budget: Rs.{budget:,}
 Available products (prioritized by style match):
 {product_list}
@@ -2161,8 +2168,12 @@ Give a warm, personalized recommendation in 3-4 sentences:
 3. Give estimated total cost
 4. End with excitement about their room transformation"""
 
-            response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
-            ai_reply = response.text
+            try:
+                response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
+                ai_reply = response.text
+            except Exception:
+                ai_reply = (f"Here's what I'd suggest for your {style_pref} style {fnum(length)}ft × {fnum(width)}ft × {fnum(height)}ft room "
+                            f"within a Rs.{budget:,} budget — check out the recommended products below!")
 
             product_cards = [{
                 "name": p["name"], "price": int(p["price"]), "brand": p["brand"], "unit": p["unit"],
@@ -2204,7 +2215,7 @@ Example: "my room is 12 by 10 feet height 9 budget 50000" -> {{"length":12,"widt
                 return {"length": None, "width": None, "height": None, "budget": None}
 
         # ── STEP: START ──
-        if step == "start" or any(word in english_message.lower() for word in ["design", "room", "renovate", "help", "hi", "hello", "start", "ok", "okay", "yes"]):
+        if step == "start":
             # If a budget was already collected earlier in the conversation (e.g. by the
             # frontend's style/budget steps), use it and skip re-asking later.
             known_budget = session.get("budget")
@@ -2218,7 +2229,7 @@ Example: "my room is 12 by 10 feet height 9 budget 50000" -> {{"length":12,"widt
             elif dims.get("length") and dims.get("width") and dims.get("height"):
                 # Got dimensions, still need budget (none known yet)
                 area = round(dims["length"] * dims["width"], 1)
-                reply = f"""Great! I got your room size: {dims['length']}ft × {dims['width']}ft × {dims['height']}ft ({area} sq.ft) ✅
+                reply = f"""Great! I got your room size: {fnum(dims['length'])}ft × {fnum(dims['width'])}ft × {fnum(dims['height'])}ft ({area} sq.ft) ✅
 
 What is your BUDGET in rupees? (e.g. 50000)"""
                 return jsonify({
@@ -2229,7 +2240,7 @@ What is your BUDGET in rupees? (e.g. 50000)"""
                 })
             elif dims.get("length") and dims.get("width"):
                 # Got L and W, need height
-                reply = f"""Got it! Length = {dims['length']}ft, Width = {dims['width']}ft ✅
+                reply = f"""Got it! Length = {fnum(dims['length'])}ft, Width = {fnum(dims['width'])}ft ✅
 
 What is the HEIGHT of your room in feet?"""
                 return jsonify({
@@ -2262,7 +2273,7 @@ What are your room's dimensions in feet? Please give Length, Width and Height to
                 return generate_recommendations(dims["length"], dims["width"], dims["height"], area, known_budget)
             if dims.get("length") and dims.get("width") and dims.get("height"):
                 area = round(dims["length"] * dims["width"], 1)
-                reply = f"""Got everything! {dims['length']}ft × {dims['width']}ft × {dims['height']}ft ({area} sq.ft) ✅
+                reply = f"""Got everything! {fnum(dims['length'])}ft × {fnum(dims['width'])}ft × {fnum(dims['height'])}ft ({area} sq.ft) ✅
 
 What is your BUDGET in rupees?"""
                 return jsonify({
@@ -2280,7 +2291,7 @@ What is your BUDGET in rupees?"""
                 area = round(length * width, 1)
                 if known_budget:
                     return generate_recommendations(length, width, height, area, known_budget)
-                reply = f"""Got it! {length}ft × {width}ft × {height}ft ({area} sq.ft) ✅
+                reply = f"""Got it! {fnum(length)}ft × {fnum(width)}ft × {fnum(height)}ft ({area} sq.ft) ✅
 
 What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"""
                 return jsonify({
@@ -2292,7 +2303,7 @@ What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"""
             # Only two numbers given (L x W) — still need height
             if len(numbers) == 2:
                 length, width = float(numbers[0]), float(numbers[1])
-                reply = f"""Got it! Length = {length}ft, Width = {width}ft ✅
+                reply = f"""Got it! Length = {fnum(length)}ft, Width = {fnum(width)}ft ✅
 
 What is the HEIGHT of your room in feet?"""
                 return jsonify({
@@ -2325,7 +2336,7 @@ Now, please give me the WIDTH and HEIGHT of your room in feet (e.g. "10 by 9")."
                 area = round(length * width, 1)
                 if known_budget:
                     return generate_recommendations(length, width, height, area, known_budget)
-                reply = f"""Got it! {length}ft × {width}ft × {height}ft ({area} sq.ft) ✅
+                reply = f"""Got it! {fnum(length)}ft × {fnum(width)}ft × {fnum(height)}ft ({area} sq.ft) ✅
 
 What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"""
                 return jsonify({
@@ -2364,7 +2375,7 @@ Now, what is the HEIGHT of your room in feet?"""
 
             reply  = f"""Perfect! Height = {height} feet ✅
 
-Your room: {length}ft × {width}ft × {height}ft ({area} sq.ft)
+Your room: {fnum(length)}ft × {fnum(width)}ft × {fnum(height)}ft ({area} sq.ft)
 
 What is your BUDGET in rupees? (e.g. 50000 or "1 lakh")"""
             return jsonify({
