@@ -472,6 +472,7 @@ const RoomVisualizer = ({dims, products, onClose}) => {
   const [activeView, setActiveView] = React.useState("floor");
   const canvasRef = React.useRef(null);
   const frontRef  = React.useRef(null);
+  const [floorLayout, setFloorLayout] = React.useState([]);
 
   const COLORS = {
     wall:    "#F5ECD7",
@@ -503,10 +504,74 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     return PRODUCT_ICONS.default;
   };
 
+  // Realistic fallback footprints (cm) for products that don't have measurements set yet
+  const DEFAULT_DIMS = {
+    "sofa":{l:180,w:85,h:80},"chair":{l:45,w:50,h:90},"table":{l:120,w:75,h:75},
+    "bed":{l:190,w:150,h:45},"wardrobe":{l:120,w:60,h:200},"cabinet":{l:90,w:45,h:180},
+    "sink":{l:60,w:50,h:20},"toilet":{l:55,w:36,h:40},"door":{l:90,w:5,h:210},
+    "tile":{l:60,w:60,h:1},"light":{l:30,w:30,h:15},"lamp":{l:20,w:20,h:45},
+    "shelf":{l:80,w:30,h:180},"mirror":{l:60,w:5,h:80},"fountain":{l:60,w:60,h:100},
+    "mandir":{l:90,w:40,h:110},"panel":{l:100,w:5,h:60},"basket":{l:45,w:50,h:15},
+    "default":{l:60,w:60,h:75},
+  };
+
+  const getDims = (p) => {
+    if (p.length_cm && p.width_cm) {
+      return { l: p.length_cm, w: p.width_cm, h: p.height_cm || 75, isReal: true };
+    }
+    const n = (p.name||"").toLowerCase();
+    for (const [key, d] of Object.entries(DEFAULT_DIMS)) {
+      if (key !== "default" && n.includes(key)) return { ...d, isReal: false };
+    }
+    return { ...DEFAULT_DIMS.default, isReal: false };
+  };
+
   const scale = 30; // pixels per foot
   const W = (dims?.length || 12) * scale;
   const H = (dims?.width  || 10) * scale;
   const roomH = (dims?.height || 9) * scale * 0.7;
+  const pxPerCm = scale / 30.48;
+
+  // Draw an arrowed dimension line between two points (horizontal or vertical)
+  const drawDimLine = (ctx, x1, y1, x2, y2) => {
+    ctx.save();
+    ctx.strokeStyle = COLORS.accent;
+    ctx.fillStyle = COLORS.accent;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    const ang = Math.atan2(y2-y1, x2-x1);
+    [[x1,y1,ang+Math.PI],[x2,y2,ang]].forEach(([x,y,a])=>{
+      ctx.beginPath();
+      ctx.moveTo(x,y);
+      ctx.lineTo(x+7*Math.cos(a-0.35), y+7*Math.sin(a-0.35));
+      ctx.lineTo(x+7*Math.cos(a+0.35), y+7*Math.sin(a+0.35));
+      ctx.closePath(); ctx.fill();
+    });
+    ctx.restore();
+  };
+
+  // Simple shelf-packing layout so real-sized boxes don't overlap
+  const computeLayout = () => {
+    const prods = (products || []).slice(0, 8);
+    const pad = 40;
+    const margin = 8;
+    let cursorX = pad + margin, cursorY = pad + margin, rowH = 0;
+    const placed = [];
+    prods.forEach((p, i) => {
+      const dd = getDims(p);
+      let pw = Math.max(18, Math.min(dd.l * pxPerCm, W - 2*margin));
+      let ph = Math.max(18, Math.min(dd.w * pxPerCm, H - 2*margin));
+      if (cursorX + pw > pad + W - margin) {
+        cursorX = pad + margin;
+        cursorY += rowH + margin;
+        rowH = 0;
+      }
+      placed.push({ ...p, dims: dd, x: cursorX, y: cursorY, pw, ph, color: PRODUCT_COLORS[i % PRODUCT_COLORS.length] });
+      cursorX += pw + margin;
+      rowH = Math.max(rowH, ph);
+    });
+    return placed;
+  };
 
   // Draw 2D Floor Plan
   React.useEffect(() => {
@@ -516,13 +581,16 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     const ctx = canvas.getContext("2d");
     const pad = 40;
     canvas.width  = W + pad * 2;
-    canvas.height = H + pad * 2;
+    canvas.height = H + pad * 2 + 20;
+
+    const layout = computeLayout();
+    setFloorLayout(layout);
 
     // Background
     ctx.fillStyle = "#FAFAF8";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Grid
+    // Grid (every 1ft)
     ctx.strokeStyle = COLORS.grid;
     ctx.lineWidth = 0.5;
     for (let x = pad; x <= W + pad; x += scale) {
@@ -532,9 +600,9 @@ const RoomVisualizer = ({dims, products, onClose}) => {
       ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W + pad, y); ctx.stroke();
     }
 
-    // Floor
+    // Floor tint
     ctx.fillStyle = COLORS.floor;
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.12;
     ctx.fillRect(pad, pad, W, H);
     ctx.globalAlpha = 1;
 
@@ -543,63 +611,57 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     ctx.lineWidth = 3;
     ctx.strokeRect(pad, pad, W, H);
 
-    // Door (bottom wall, left side)
+    // Door with swing arc (bottom wall, left side)
+    const doorW = Math.min(30, W*0.15);
     ctx.strokeStyle = COLORS.door;
     ctx.lineWidth = 2;
-    ctx.strokeRect(pad, pad + H - 6, 30, 6);
-    ctx.fillStyle = COLORS.door;
-    ctx.font = "10px sans-serif";
-    ctx.fillText("🚪", pad + 5, pad + H - 8);
+    ctx.beginPath(); ctx.moveTo(pad, pad+H); ctx.lineTo(pad+doorW, pad+H); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(pad, pad+H, doorW, -Math.PI/2, 0);
+    ctx.setLineDash([3,2]); ctx.stroke(); ctx.setLineDash([]);
 
     // Window (top wall, center)
     ctx.fillStyle = COLORS.window;
     ctx.fillRect(pad + W/2 - 20, pad - 3, 40, 6);
-    ctx.fillStyle = COLORS.text;
-    ctx.fillText("🪟", pad + W/2 - 8, pad - 5);
+    ctx.strokeStyle = "#6A9BB0"; ctx.lineWidth=1;
+    ctx.strokeRect(pad + W/2 - 20, pad - 3, 40, 6);
 
-    // Place products
-    const prods = products || [];
-    const cols = Math.ceil(Math.sqrt(prods.length));
-    prods.slice(0, 8).forEach((p, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const pw = Math.min(60, W / cols - 10);
-      const ph = Math.min(50, H / Math.ceil(prods.length / cols) - 10);
-      const px = pad + 15 + col * (W / cols);
-      const py = pad + 15 + row * (H / Math.ceil(prods.length / cols));
-
-      // Product box
-      ctx.fillStyle = PRODUCT_COLORS[i % PRODUCT_COLORS.length];
-      ctx.globalAlpha = 0.7;
+    // Products, to scale
+    layout.forEach((p) => {
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = 0.75;
       ctx.beginPath();
-      ctx.roundRect(px, py, pw, ph, 4);
+      ctx.roundRect(p.x, p.y, p.pw, p.ph, 4);
       ctx.fill();
       ctx.globalAlpha = 1;
-
-      ctx.strokeStyle = PRODUCT_COLORS[i % PRODUCT_COLORS.length];
+      ctx.strokeStyle = p.color;
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Icon
-      ctx.font = "16px sans-serif";
-      ctx.fillText(getProductIcon(p.name), px + pw/2 - 8, py + ph/2 + 4);
-
-      // Label
-      ctx.fillStyle = COLORS.text;
-      ctx.font = "bold 8px sans-serif";
+      ctx.font = `${Math.min(16, p.ph*0.5)}px sans-serif`;
       ctx.textAlign = "center";
-      const label = p.name.length > 10 ? p.name.substring(0,10)+"..." : p.name;
-      ctx.fillText(label, px + pw/2, py + ph + 10);
+      ctx.fillText(getProductIcon(p.name), p.x + p.pw/2, p.y + p.ph/2 + 4);
+
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 7px sans-serif";
+      const label = p.name.length > 12 ? p.name.substring(0,12)+"…" : p.name;
+      ctx.fillText(label, p.x + p.pw/2, p.y + p.ph + 9);
+      if (p.pw > 30) {
+        ctx.font = "6px sans-serif";
+        ctx.fillStyle = "#888";
+        ctx.fillText(`${Math.round(p.dims.l)}×${Math.round(p.dims.w)}cm`, p.x + p.pw/2, p.y + p.ph + 17);
+      }
       ctx.textAlign = "left";
     });
 
-    // Dimensions
-    ctx.fillStyle = COLORS.accent;
-    ctx.font = "bold 11px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(`${dims?.length || 12} ft`, pad + W/2, pad - 10);
+    // Room dimension lines (outside the walls, with arrows)
+    drawDimLine(ctx, pad, pad-14, pad+W, pad-14);
+    ctx.fillStyle = COLORS.accent; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(`${dims?.length || 12} ft`, pad + W/2, pad - 18);
+
+    drawDimLine(ctx, pad-14, pad, pad-14, pad+H);
     ctx.save();
-    ctx.translate(pad - 12, pad + H/2);
+    ctx.translate(pad - 22, pad + H/2);
     ctx.rotate(-Math.PI/2);
     ctx.fillText(`${dims?.width || 10} ft`, 0, 0);
     ctx.restore();
@@ -608,7 +670,7 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     // Title
     ctx.fillStyle = COLORS.text;
     ctx.font = "bold 12px sans-serif";
-    ctx.fillText("📐 Floor Plan", pad, pad - 18);
+    ctx.fillText("📐 Floor Plan (to scale)", pad, canvas.height - 6);
 
   }, [activeView, dims, products]);
 
@@ -619,30 +681,26 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const cW = W + 80;
-    const cH = roomH + 80;
+    const cH = roomH + 90;
     canvas.width  = cW;
     canvas.height = cH;
     const pad = 40;
 
-    // Sky/ceiling
     ctx.fillStyle = "#FFF8EE";
     ctx.fillRect(0, 0, cW, cH);
 
-    // Back wall
     const wallGrad = ctx.createLinearGradient(pad, pad, pad, pad + roomH);
     wallGrad.addColorStop(0, "#F5ECD7");
     wallGrad.addColorStop(1, "#E8D5B0");
     ctx.fillStyle = wallGrad;
     ctx.fillRect(pad, pad, W, roomH);
 
-    // Floor
     const floorGrad = ctx.createLinearGradient(pad, pad + roomH, pad, pad + roomH + 30);
     floorGrad.addColorStop(0, "#C4955A");
     floorGrad.addColorStop(1, "#A07840");
     ctx.fillStyle = floorGrad;
     ctx.fillRect(pad, pad + roomH, W, 30);
 
-    // Wall border
     ctx.strokeStyle = "#8B6914";
     ctx.lineWidth = 2;
     ctx.strokeRect(pad, pad, W, roomH);
@@ -655,73 +713,62 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     ctx.strokeStyle = "#6A9BB0";
     ctx.lineWidth = 2;
     ctx.strokeRect(pad + W/2 - 30, pad + 20, 60, 50);
-    // Window cross
     ctx.beginPath();
-    ctx.moveTo(pad + W/2, pad + 20);
-    ctx.lineTo(pad + W/2, pad + 70);
-    ctx.moveTo(pad + W/2 - 30, pad + 45);
-    ctx.lineTo(pad + W/2 + 30, pad + 45);
+    ctx.moveTo(pad + W/2, pad + 20); ctx.lineTo(pad + W/2, pad + 70);
+    ctx.moveTo(pad + W/2 - 30, pad + 45); ctx.lineTo(pad + W/2 + 30, pad + 45);
     ctx.stroke();
 
-    // Place products along the floor
-    const prods = products || [];
-    const prodW = Math.min(W / (prods.length + 1) - 5, 60);
-    const prodMaxH = roomH * 0.6;
+    // Products, to real scale (width from length_cm, height from height_cm)
+    const prods = (products || []).slice(0, 6);
+    const dimsList = prods.map(getDims);
+    let totalW = dimsList.reduce((s,d)=>s + d.l*pxPerCm, 0) + (prods.length+1)*10;
+    const shrink = totalW > W ? (W-20) / (totalW-20) : 1;
 
-    prods.slice(0, 6).forEach((p, i) => {
-      const px = pad + (i + 1) * (W / (prods.length + 1)) - prodW/2;
-      const ph = prodMaxH * (0.4 + Math.random() * 0.3);
+    let cursorX = pad + 10;
+    prods.forEach((p, i) => {
+      const dd = dimsList[i];
+      const pw = Math.max(14, dd.l * pxPerCm * shrink);
+      const ph = Math.min(roomH * 0.85, dd.h * pxPerCm * shrink);
+      const px = cursorX;
       const py = pad + roomH - ph;
 
-      // Product shadow
       ctx.fillStyle = "rgba(0,0,0,0.1)";
       ctx.beginPath();
-      ctx.ellipse(px + prodW/2, pad + roomH + 15, prodW/2, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(px + pw/2, pad + roomH + 15, pw/2, 8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Product body
-      const grad = ctx.createLinearGradient(px, py, px + prodW, py);
+      const grad = ctx.createLinearGradient(px, py, px + pw, py);
       grad.addColorStop(0, PRODUCT_COLORS[i % PRODUCT_COLORS.length]);
       grad.addColorStop(1, PRODUCT_COLORS[(i+1) % PRODUCT_COLORS.length]);
       ctx.fillStyle = grad;
       ctx.globalAlpha = 0.85;
       ctx.beginPath();
-      ctx.roundRect(px, py, prodW, ph, 6);
+      ctx.roundRect(px, py, pw, ph, 6);
       ctx.fill();
       ctx.globalAlpha = 1;
-
       ctx.strokeStyle = "rgba(0,0,0,0.2)";
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Product icon
-      ctx.font = `${Math.min(prodW * 0.5, 24)}px sans-serif`;
+      ctx.font = `${Math.min(pw * 0.5, 24)}px sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(getProductIcon(p.name), px + prodW/2, py + ph/2 + 6);
+      ctx.fillText(getProductIcon(p.name), px + pw/2, py + ph/2 + 6);
 
-      // Product name below floor
       ctx.fillStyle = COLORS.text;
       ctx.font = "bold 8px sans-serif";
-      const label = p.name.length > 8 ? p.name.substring(0,8)+"..." : p.name;
-      ctx.fillText(label, px + prodW/2, pad + roomH + 28);
+      const label = p.name.length > 8 ? p.name.substring(0,8)+"…" : p.name;
+      ctx.fillText(label, px + pw/2, pad + roomH + 28);
+      ctx.font = "7px sans-serif";
+      ctx.fillStyle = "#888";
+      ctx.fillText(`H:${Math.round(dd.h)}cm`, px + pw/2, pad + roomH + 38);
       ctx.textAlign = "left";
+
+      cursorX += pw + 10*shrink;
     });
 
-    // Dimension lines
-    ctx.strokeStyle = COLORS.accent;
-    ctx.setLineDash([4, 3]);
-    ctx.lineWidth = 1;
-    // Width dimension
-    ctx.beginPath();
-    ctx.moveTo(pad, pad + roomH + 35);
-    ctx.lineTo(pad + W, pad + roomH + 35);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = COLORS.accent;
-    ctx.font = "bold 10px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(`${dims?.length || 12} ft`, pad + W/2, pad + roomH + 48);
-    // Height dimension
+    drawDimLine(ctx, pad, pad + roomH + 48, pad + W, pad + roomH + 48);
+    ctx.fillStyle = COLORS.accent; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(`${dims?.length || 12} ft`, pad + W/2, pad + roomH + 62);
     ctx.save();
     ctx.translate(pad - 20, pad + roomH/2);
     ctx.rotate(-Math.PI/2);
@@ -729,15 +776,23 @@ const RoomVisualizer = ({dims, products, onClose}) => {
     ctx.restore();
     ctx.textAlign = "left";
 
-    // Title
     ctx.fillStyle = COLORS.text;
     ctx.font = "bold 12px sans-serif";
-    ctx.fillText("🎨 Front View", pad, pad - 10);
+    ctx.fillText("🎨 Front View (to scale)", pad, pad - 10);
 
   }, [activeView, dims, products]);
 
+  const downloadImage = (canvasEl, filename) => {
+    if (!canvasEl) return;
+    const link = document.createElement("a");
+    link.download = filename;
+    link.href = canvasEl.toDataURL("image/png");
+    link.click();
+  };
+
   const area = ((dims?.length||12) * (dims?.width||10)).toFixed(0);
   const totalCost = products?.reduce((s,p)=>s+(p.price||0),0) || 0;
+  const anyEstimated = (products||[]).some(p => !(p.length_cm && p.width_cm));
 
   return (
     <div style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -762,11 +817,30 @@ const RoomVisualizer = ({dims, products, onClose}) => {
           ))}
         </div>
 
+        {anyEstimated && activeView!=="summary" && (
+          <div style={{margin:"10px 16px 0",background:"#FFF3DC",border:"1px solid #F0D9A8",borderRadius:8,padding:"6px 10px",fontSize:10,color:"#8A6417"}}>
+            ⚠️ Some products don't have exact measurements yet, so their size here is an estimate.
+          </div>
+        )}
+
         {/* Floor Plan View */}
         {activeView==="floor"&&(
           <div style={{padding:16,textAlign:"center"}}>
             <canvas ref={canvasRef} style={{maxWidth:"100%",borderRadius:8,border:"1px solid #eee"}}/>
-            <div style={{fontSize:11,color:"#888",marginTop:8}}>Top-down view showing product placement</div>
+            <div style={{fontSize:11,color:"#888",marginTop:8}}>Top-down view — products drawn to real scale where measurements exist</div>
+            <button onClick={()=>downloadImage(canvasRef.current,"floor-plan.png")} style={{marginTop:10,background:"#f0f0f0",border:"1px solid #ddd",borderRadius:8,padding:"6px 14px",fontSize:12,cursor:"pointer"}}>⬇️ Save as Image</button>
+            {floorLayout.length>0&&(
+              <div style={{marginTop:14,textAlign:"left",background:"#f8f9fa",borderRadius:10,padding:12}}>
+                <div style={{fontWeight:600,fontSize:12,marginBottom:8,color:"#555"}}>Legend</div>
+                {floorLayout.map((p,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",fontSize:11}}>
+                    <div style={{width:12,height:12,borderRadius:3,background:p.color,flexShrink:0}}/>
+                    <div style={{flex:1}}>{p.name}</div>
+                    <div style={{color:"#888"}}>{Math.round(p.dims.l)}×{Math.round(p.dims.w)}cm{!p.dims.isReal&&" (est.)"}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -774,7 +848,8 @@ const RoomVisualizer = ({dims, products, onClose}) => {
         {activeView==="front"&&(
           <div style={{padding:16,textAlign:"center"}}>
             <canvas ref={frontRef} style={{maxWidth:"100%",borderRadius:8,border:"1px solid #eee"}}/>
-            <div style={{fontSize:11,color:"#888",marginTop:8}}>Front view showing room with products</div>
+            <div style={{fontSize:11,color:"#888",marginTop:8}}>Front view — heights drawn to real scale where measurements exist</div>
+            <button onClick={()=>downloadImage(frontRef.current,"front-view.png")} style={{marginTop:10,background:"#f0f0f0",border:"1px solid #ddd",borderRadius:8,padding:"6px 14px",fontSize:12,cursor:"pointer"}}>⬇️ Save as Image</button>
           </div>
         )}
 
@@ -794,16 +869,20 @@ const RoomVisualizer = ({dims, products, onClose}) => {
             </div>
 
             <div style={{fontWeight:600,fontSize:14,marginBottom:10}}>🛍️ Recommended Products</div>
-            {products?.map((p,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"0.5px solid #f0f0f0"}}>
-                <div style={{width:36,height:36,borderRadius:8,background:PRODUCT_COLORS[i%PRODUCT_COLORS.length],display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{getProductIcon(p.name)}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:500,fontSize:13}}>{p.name}</div>
-                  <div style={{fontSize:11,color:"#888"}}>{p.brand} • {p.room_name}</div>
+            {products?.map((p,i)=>{
+              const dd = getDims(p);
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"0.5px solid #f0f0f0"}}>
+                  <div style={{width:36,height:36,borderRadius:8,background:PRODUCT_COLORS[i%PRODUCT_COLORS.length],display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{getProductIcon(p.name)}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:500,fontSize:13}}>{p.name}</div>
+                    <div style={{fontSize:11,color:"#888"}}>{p.brand} • {p.room_name}</div>
+                    <div style={{fontSize:10,color:"#aaa"}}>{Math.round(dd.l)}×{Math.round(dd.w)}×{Math.round(dd.h)}cm{!dd.isReal&&" (estimated)"}</div>
+                  </div>
+                  <div style={{fontWeight:700,color:"#BA7517",fontSize:13}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
                 </div>
-                <div style={{fontWeight:700,color:"#BA7517",fontSize:13}}>₹{Number(p.price).toLocaleString("en-IN")}</div>
-              </div>
-            ))}
+              );
+            })}
 
             <div style={{background:"linear-gradient(135deg,#BA7517,#E8960A)",borderRadius:12,padding:14,marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{color:"white",fontWeight:600,fontSize:14}}>Total Estimated Cost</div>

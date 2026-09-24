@@ -2134,7 +2134,7 @@ def room_design_chat():
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor.execute("""
                 SELECT p.name, p.price, p.unit, p.brand, p.material, p.color, p.image_url,
-                       p.style_tag, r.name as room_name
+                       p.style_tag, p.length_cm, p.width_cm, p.height_cm, r.name as room_name
                 FROM products p
                 JOIN rooms r ON p.room_id = r.id
                 WHERE p.price <= %s
@@ -2164,7 +2164,13 @@ Give a warm, personalized recommendation in 3-4 sentences:
             response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
             ai_reply = response.text
 
-            product_cards = [{"name": p["name"], "price": int(p["price"]), "brand": p["brand"], "unit": p["unit"], "image_url": p.get("image_url", ""), "room_name": p["room_name"], "style_tag": p.get("style_tag", "")} for p in products]
+            product_cards = [{
+                "name": p["name"], "price": int(p["price"]), "brand": p["brand"], "unit": p["unit"],
+                "image_url": p.get("image_url", ""), "room_name": p["room_name"], "style_tag": p.get("style_tag", ""),
+                "length_cm": float(p["length_cm"]) if p.get("length_cm") is not None else None,
+                "width_cm":  float(p["width_cm"])  if p.get("width_cm")  is not None else None,
+                "height_cm": float(p["height_cm"]) if p.get("height_cm") is not None else None,
+            } for p in products]
 
             return jsonify({
                 "reply": translate_reply(ai_reply),
